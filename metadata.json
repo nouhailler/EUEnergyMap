@@ -1,0 +1,7 @@
+{
+  "name": "EU Energy Map",
+  "description": "Tableau de bord pédagogique et factuel de l'électricité dans les 27 pays membres de l'Union européenne.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

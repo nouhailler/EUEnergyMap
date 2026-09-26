@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="128" fill="#0284c7" />
+  <!-- EU stars ring accent -->
+  <circle cx="256" cy="256" r="180" stroke="#38bdf8" stroke-width="4" stroke-dasharray="12 12" opacity="0.4" />
+  <!-- Energy lightning / leaf motif -->
+  <path d="M280 96L176 272H272L232 416L336 240H240L280 96Z" fill="#facc15" stroke="#ca8a04" stroke-width="8" stroke-linejoin="round" />
+  <circle cx="160" cy="180" r="16" fill="#4ade80" />
+  <circle cx="352" cy="340" r="16" fill="#38bdf8" />
+  <circle cx="360" cy="180" r="12" fill="#60a5fa" />
+  <circle cx="150" cy="340" r="12" fill="#2dd4bf" />
+</svg>
