@@ -33,12 +33,12 @@ export const CountryDetailView: React.FC<CountryDetailViewProps> = ({
   const [showNetLoadExplainer, setShowNetLoadExplainer] = useState(false);
 
   // Décomposition des sources
-  const breakdown = viewMode === 'consumption' && snapshot.consumptionBreakdown
+  const breakdown = (viewMode === 'consumption' && snapshot?.consumptionBreakdown)
     ? snapshot.consumptionBreakdown
-    : snapshot.productionBreakdown;
+    : (snapshot?.productionBreakdown || {});
 
   // Calcul du total pour les pourcentages de production
-  const validSources = Object.entries(breakdown)
+  const validSources = Object.entries(breakdown || {})
     .filter(([_, val]) => val !== null && val > 0)
     .map(([key, val]) => ({
       key: key as ProductionSourceKey,
@@ -54,6 +54,8 @@ export const CountryDetailView: React.FC<CountryDetailViewProps> = ({
     ...s,
     sharePercent: totalSumMW > 0 ? Math.round((s.powerMW / totalSumMW) * 100) : 0,
   }));
+
+  const exchangeFlows = Array.isArray(snapshot?.exchangeFlows) ? snapshot.exchangeFlows : [];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -340,9 +342,9 @@ export const CountryDetailView: React.FC<CountryDetailViewProps> = ({
               <span>Échanges avec les Voisins</span>
             </h3>
 
-            {snapshot.exchangeFlows.length > 0 ? (
+            {exchangeFlows.length > 0 ? (
               <div className="space-y-2">
-                {snapshot.exchangeFlows.map((flow, idx) => {
+                {exchangeFlows.map((flow, idx) => {
                   const isExport = flow.fromZone === snapshot.zoneKey;
                   const partner = isExport ? flow.toZone : flow.fromZone;
 

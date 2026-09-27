@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import {
   CountryElectricitySnapshot,
   IndicatorMode,
@@ -6,8 +8,18 @@ import {
 } from '../../types/energy';
 import { EU_COUNTRIES, EUCountryConfig } from '../../data/euCountries';
 import { PRODUCTION_SOURCES } from '../../data/sourcesMeta';
-import { UnitFormattedValue } from '../common/UnitFormattedValue';
-import { DataQualityBadge } from '../common/DataQualityBadge';
+import {
+  RotateCcw,
+  Search,
+  Layers,
+  Maximize2,
+  Minimize2,
+  Check,
+  Eye,
+  EyeOff,
+  Sparkles,
+  Info,
+} from 'lucide-react';
 
 interface EUEnergyMapProps {
   snapshots: Record<string, CountryElectricitySnapshot>;
@@ -16,427 +28,845 @@ interface EUEnergyMapProps {
   onSelectCountry: (countryCode: string) => void;
 }
 
+type TileLayerTheme = 'positron' | 'dark' | 'osm' | 'none';
+
 export const EUEnergyMap: React.FC<EUEnergyMapProps> = ({
   snapshots,
   selectedIndicator,
   onSelectIndicator,
   onSelectCountry,
 }) => {
-  const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
-  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const geojsonLayerRef = useRef<L.GeoJSON | null>(null);
+  const markersLayerRef = useRef<L.LayerGroup | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
 
-  // Calcul de la source principale de production pour un snapshot
-  const getPrimarySource = (snapshot?: CountryElectricitySnapshot): { key: ProductionSourceKey; label: string; color: string } => {
-    if (!snapshot || !snapshot.productionBreakdown) {
-      return { key: 'unknown', label: 'Indisponible', color: '#94a3b8' };
+  const [geojsonData, setGeojsonData] = useState<any | null>(null);
+  const [isLoadingGeo, setIsLoadingGeo] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [selectedTileTheme, setSelectedTileTheme] = useState<TileLayerTheme>('positron');
+  const [showLabels, setShowLabels] = useState<boolean>(true);
+  const [isExpanded, setIsExpanded] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Indexation rapide des pays UE par code ISO2
+  const euCountriesMap = useMemo(() => {
+    const map = new Map<string, EUCountryConfig>();
+    for (const c of EU_COUNTRIES) {
+      map.set(c.code, c);
     }
-    let maxKey: ProductionSourceKey = 'unknown';
-    let maxVal = -1;
-    for (const [key, val] of Object.entries(snapshot.productionBreakdown)) {
-      if (val !== null && val > maxVal) {
-        maxVal = val;
-        maxKey = key as ProductionSourceKey;
+    return map;
+  }, []);
+
+  // Détermination de la source principale de production
+  const getPrimarySource = useCallback(
+    (snapshot?: CountryElectricitySnapshot): { key: ProductionSourceKey; label: string; color: string } => {
+      if (!snapshot || !snapshot.productionBreakdown) {
+        return { key: 'unknown', label: 'Indisponible', color: '#94a3b8' };
       }
-    }
-    const meta = PRODUCTION_SOURCES[maxKey];
-    return {
-      key: maxKey,
-      label: meta ? meta.labelFr : 'Autre',
-      color: meta ? meta.color : '#94a3b8',
+      let maxKey: ProductionSourceKey = 'unknown';
+      let maxVal = -1;
+      for (const [key, val] of Object.entries(snapshot.productionBreakdown)) {
+        if (val !== null && val > maxVal) {
+          maxVal = val;
+          maxKey = key as ProductionSourceKey;
+        }
+      }
+      const meta = PRODUCTION_SOURCES[maxKey];
+      return {
+        key: maxKey,
+        label: meta ? meta.labelFr : 'Autre',
+        color: meta ? meta.color : '#94a3b8',
+      };
+    },
+    [],
+  );
+
+  // Détermination de la couleur selon l'indicateur sélectionné
+  const getCountryFill = useCallback(
+    (countryCode: string): string => {
+      const s = snapshots[countryCode];
+      if (!s) return '#94a3b8'; // Gris neutre si en attente de données
+
+      if (selectedIndicator === 'carbonIntensity') {
+        const ci = s.carbonIntensity;
+        if (ci == null) return '#94a3b8';
+        if (ci <= 50) return '#10b981'; // Vert vif (< 50g)
+        if (ci <= 100) return '#34d399'; // Vert doux (50-100g)
+        if (ci <= 200) return '#fbbf24'; // Jaune ambré (100-200g)
+        if (ci <= 350) return '#f97316'; // Orange (200-350g)
+        if (ci <= 500) return '#ef4444'; // Rouge vif (350-500g)
+        return '#991b1b'; // Rouge foncé / bordeaux (> 500g)
+      }
+
+      if (selectedIndicator === 'renewableShare') {
+        const ren = s.renewablePercentage;
+        if (ren == null) return '#94a3b8';
+        if (ren >= 80) return '#047857';
+        if (ren >= 60) return '#10b981';
+        if (ren >= 40) return '#34d399';
+        if (ren >= 20) return '#a7f3d0';
+        return '#e2e8f0';
+      }
+
+      if (selectedIndicator === 'carbonFreeShare') {
+        const cf = s.fossilFreePercentage;
+        if (cf == null) return '#94a3b8';
+        if (cf >= 85) return '#4338ca';
+        if (cf >= 70) return '#6366f1';
+        if (cf >= 50) return '#818cf8';
+        if (cf >= 30) return '#c7d2fe';
+        return '#e2e8f0';
+      }
+
+      if (selectedIndicator === 'totalLoad') {
+        const load = s.totalConsumption;
+        if (load == null) return '#94a3b8';
+        if (load >= 45000) return '#0369a1';
+        if (load >= 25000) return '#0ea5e9';
+        if (load >= 10000) return '#38bdf8';
+        if (load >= 3000) return '#7dd3fc';
+        return '#bae6fd';
+      }
+
+      if (selectedIndicator === 'primarySource') {
+        return getPrimarySource(s).color;
+      }
+
+      return '#94a3b8';
+    },
+    [snapshots, selectedIndicator, getPrimarySource],
+  );
+
+  // Texte court pour l'étiquette sur le pays
+  const getShortValueText = useCallback(
+    (countryCode: string): string => {
+      const s = snapshots[countryCode];
+      if (!s) return '—';
+      if (selectedIndicator === 'carbonIntensity') {
+        return s.carbonIntensity != null ? `${s.carbonIntensity}g` : '—';
+      }
+      if (selectedIndicator === 'renewableShare') {
+        return s.renewablePercentage != null ? `${Math.round(s.renewablePercentage)}%` : '—';
+      }
+      if (selectedIndicator === 'carbonFreeShare') {
+        return s.fossilFreePercentage != null ? `${Math.round(s.fossilFreePercentage)}%` : '—';
+      }
+      if (selectedIndicator === 'totalLoad') {
+        return s.totalConsumption != null ? `${(s.totalConsumption / 1000).toFixed(1)}GW` : '—';
+      }
+      if (selectedIndicator === 'primarySource') {
+        return (getPrimarySource(s)?.label || '—').slice(0, 4);
+      }
+      return '';
+    },
+    [snapshots, selectedIndicator, getPrimarySource],
+  );
+
+  // Chargement asynchrone du GeoJSON européen
+  useEffect(() => {
+    let isCancelled = false;
+    setIsLoadingGeo(true);
+    setLoadError(null);
+
+    fetch('/data/europe.geojson')
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`Échec du chargement du fichier GeoJSON (Code ${res.status})`);
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (!isCancelled) {
+          setGeojsonData(data);
+          setIsLoadingGeo(false);
+        }
+      })
+      .catch((err) => {
+        if (!isCancelled) {
+          console.error('[EUEnergyMap] Erreur de chargement GeoJSON:', err);
+          setLoadError(err.message || 'Impossible de charger la carte');
+          setIsLoadingGeo(false);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
     };
+  }, []);
+
+  // Initialisation de la carte Leaflet
+  useEffect(() => {
+    if (!mapContainerRef.current) return;
+
+    // Nettoyer toute instance existante et réinitialiser l'ID Leaflet du conteneur DOM
+    if (mapInstanceRef.current) {
+      try {
+        mapInstanceRef.current.remove();
+      } catch (e) {
+        // Ignorer si déjà détruit
+      }
+      mapInstanceRef.current = null;
+    }
+    if ((mapContainerRef.current as any)._leaflet_id) {
+      delete (mapContainerRef.current as any)._leaflet_id;
+    }
+
+    // Emprise de l'Europe géographique : lat 34 à 71, lon -15 à 35
+    const europeBounds = L.latLngBounds(
+      L.latLng(33.5, -12.0),
+      L.latLng(71.5, 36.0),
+    );
+
+    const map = L.map(mapContainerRef.current, {
+      center: [52.5, 13.0],
+      zoom: 4,
+      minZoom: 3,
+      maxZoom: 8,
+      maxBounds: L.latLngBounds(L.latLng(25.0, -30.0), L.latLng(75.0, 55.0)),
+      maxBoundsViscosity: 0.8,
+      zoomControl: false,
+      attributionControl: false,
+    });
+
+    // Ajuster l'affichage pour cadrer l'Europe
+    map.fitBounds(europeBounds, { padding: [16, 16] });
+
+    // Ajout des contrôles de zoom en haut à gauche
+    L.control.zoom({ position: 'topleft' }).addTo(map);
+
+    // Attribution discrète en bas à droite
+    L.control
+      .attribution({
+        position: 'bottomright',
+        prefix: false,
+      })
+      .addAttribution('© OpenStreetMap, CartoDB, Electricity Maps')
+      .addTo(map);
+
+    mapInstanceRef.current = map;
+
+    return () => {
+      try {
+        map.remove();
+      } catch (e) {
+        // Ignorer si déjà démonté
+      }
+      mapInstanceRef.current = null;
+      if (mapContainerRef.current && (mapContainerRef.current as any)._leaflet_id) {
+        delete (mapContainerRef.current as any)._leaflet_id;
+      }
+    };
+  }, []);
+
+  // Gestion du fond de carte (TileLayer)
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    if (tileLayerRef.current) {
+      map.removeLayer(tileLayerRef.current);
+      tileLayerRef.current = null;
+    }
+
+    if (selectedTileTheme === 'none') {
+      return;
+    }
+
+    let tileUrl = '/api/carto/tiles/light_all/{z}/{x}/{y}.png';
+    let maxZoom = 19;
+
+    if (selectedTileTheme === 'dark') {
+      tileUrl = '/api/carto/tiles/dark_all/{z}/{x}/{y}.png';
+    } else if (selectedTileTheme === 'osm') {
+      tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+    }
+
+    const tileLayer = L.tileLayer(tileUrl, {
+      subdomains: 'abc',
+      maxZoom,
+      opacity: 0.9,
+    });
+
+    tileLayer.addTo(map);
+    tileLayerRef.current = tileLayer;
+  }, [selectedTileTheme]);
+
+  // Redimensionnement de la carte lorsque le conteneur change de taille
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [isExpanded]);
+
+  // Rendu et mise à jour de la couche GeoJSON et des étiquettes pays
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !geojsonData) return;
+
+    // Nettoyage de la couche GeoJSON précédente
+    if (geojsonLayerRef.current) {
+      map.removeLayer(geojsonLayerRef.current);
+      geojsonLayerRef.current = null;
+    }
+
+    // Nettoyage de la couche des marqueurs
+    if (markersLayerRef.current) {
+      map.removeLayer(markersLayerRef.current);
+      markersLayerRef.current = null;
+    }
+
+    const markersGroup = L.layerGroup();
+
+    // Style de base pour chaque pays
+    const styleFeature = (feature: any) => {
+      const iso2 = feature?.properties?.ISO2;
+      const isEU = euCountriesMap.has(iso2);
+
+      if (!isEU) {
+        // Pays hors UE (Royaume-Uni, Norvège, Suisse, etc.) pour réalisme cartographique
+        return {
+          fillColor: selectedTileTheme === 'dark' ? '#1e293b' : '#f1f5f9',
+          fillOpacity: 0.45,
+          color: selectedTileTheme === 'dark' ? '#334155' : '#cbd5e1',
+          weight: 0.8,
+          dashArray: '2, 3',
+        };
+      }
+
+      const fillColor = getCountryFill(iso2);
+
+      return {
+        fillColor,
+        fillOpacity: 0.85,
+        color: '#ffffff',
+        weight: 1.2,
+      };
+    };
+
+    // Construction de la couche GeoJSON avec interactivité
+    const geoLayer = L.geoJSON(geojsonData, {
+      style: styleFeature,
+      onEachFeature: (feature, layer) => {
+        const iso2 = feature?.properties?.ISO2;
+        const euConfig = euCountriesMap.get(iso2);
+
+        if (!euConfig) {
+          // Pays hors UE : infobulle contextuelle simple
+          const name = feature?.properties?.NAME || iso2;
+          layer.bindTooltip(
+            `<div class="text-xs font-medium text-slate-700 dark:text-slate-200">
+               <span>${name}</span>
+               <span class="block text-[10px] text-slate-400">Pays tiers (hors UE 27)</span>
+             </div>`,
+            { sticky: true, opacity: 0.95, className: 'leaflet-custom-tooltip' },
+          );
+          return;
+        }
+
+        const snapshot = snapshots[iso2];
+        const primarySource = getPrimarySource(snapshot);
+
+        // Tooltip riche et réaliste au survol
+        const tooltipHtml = `
+          <div class="p-2.5 max-w-[240px] text-xs font-sans">
+            <div class="flex items-center justify-between gap-2 pb-1.5 mb-1.5 border-b border-slate-200 dark:border-slate-700">
+              <span class="font-bold text-sm flex items-center gap-1.5 text-slate-900 dark:text-white">
+                <span>${euConfig.flag}</span>
+                <span>${euConfig.nameFr}</span>
+              </span>
+              <span class="text-[10px] font-semibold bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300 px-1.5 py-0.5 rounded">
+                ${euConfig.code}
+              </span>
+            </div>
+
+            <div class="space-y-1 text-slate-700 dark:text-slate-300">
+              <div class="flex justify-between items-center">
+                <span class="text-slate-500 dark:text-slate-400">Intensité carbone :</span>
+                <span class="font-bold ${
+                  snapshot?.carbonIntensity != null && (snapshot.carbonIntensity) <= 100
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-amber-600 dark:text-amber-400'
+                }">
+                  ${snapshot?.carbonIntensity != null ? `${snapshot.carbonIntensity} gCO₂/kWh` : 'Non disponible'}
+                </span>
+              </div>
+
+              <div class="flex justify-between items-center">
+                <span class="text-slate-500 dark:text-slate-400">Renouvelable :</span>
+                <span class="font-semibold text-emerald-600 dark:text-emerald-400">
+                  ${snapshot?.renewablePercentage != null ? `${Math.round(snapshot.renewablePercentage)}%` : '—'}
+                </span>
+              </div>
+
+              <div class="flex justify-between items-center">
+                <span class="text-slate-500 dark:text-slate-400">Sans fossile :</span>
+                <span class="font-semibold text-indigo-600 dark:text-indigo-400">
+                  ${snapshot?.fossilFreePercentage != null ? `${Math.round(snapshot.fossilFreePercentage)}%` : '—'}
+                </span>
+              </div>
+
+              <div class="flex justify-between items-center">
+                <span class="text-slate-500 dark:text-slate-400">Consommation :</span>
+                <span class="font-semibold text-sky-600 dark:text-sky-400">
+                  ${snapshot?.totalConsumption != null ? `${((snapshot.totalConsumption) / 1000).toFixed(1)} GW` : '—'}
+                </span>
+              </div>
+
+              <div class="flex justify-between items-center">
+                <span class="text-slate-500 dark:text-slate-400">Source dominante :</span>
+                <span class="font-semibold text-amber-600 dark:text-amber-400">
+                  ${primarySource.label}
+                </span>
+              </div>
+            </div>
+
+            <div class="mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-800 text-[10px] text-sky-600 dark:text-sky-400 font-semibold text-center">
+              👉 Cliquer pour ouvrir la fiche détaillée
+            </div>
+          </div>
+        `;
+
+        layer.bindTooltip(tooltipHtml, {
+          sticky: true,
+          direction: 'auto',
+          opacity: 0.98,
+          className: 'leaflet-custom-tooltip shadow-xl rounded-xl border border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md',
+        });
+
+        // Événements souris
+        layer.on({
+          mouseover: (e) => {
+            const l = e.target;
+            l.setStyle({
+              weight: 3,
+              color: '#0284c7',
+              fillOpacity: 0.98,
+            });
+            l.bringToFront();
+          },
+          mouseout: (e) => {
+            geoLayer.resetStyle(e.target);
+          },
+          click: () => {
+            onSelectCountry(iso2);
+          },
+        });
+
+        // Marqueur étiquette textuelle au centre géographique du pays
+        if (showLabels && feature.properties?.LAT && feature.properties?.LON) {
+          const lat = feature.properties.LAT;
+          const lon = feature.properties.LON;
+          const valueText = getShortValueText(iso2);
+
+          const labelHtml = `
+            <div class="country-map-badge group cursor-pointer transition-transform duration-150 hover:scale-110">
+              <div class="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-white/90 dark:bg-slate-900/90 shadow-md border border-slate-200 dark:border-slate-700 backdrop-blur-xs select-none pointer-events-none">
+                <span class="text-xs leading-none">${euConfig.flag}</span>
+                <span class="font-bold text-[10px] text-slate-800 dark:text-slate-100">${iso2}</span>
+                <span class="font-medium text-[9px] text-sky-600 dark:text-sky-400 ml-0.5 border-l border-slate-200 dark:border-slate-700 pl-1">
+                  ${valueText}
+                </span>
+              </div>
+            </div>
+          `;
+
+          const markerIcon = L.divIcon({
+            className: 'custom-leaflet-div-icon',
+            html: labelHtml,
+            iconSize: [60, 20],
+            iconAnchor: [30, 10],
+          });
+
+          const marker = L.marker([lat, lon], {
+            icon: markerIcon,
+            interactive: false,
+          });
+
+          markersGroup.addLayer(marker);
+        }
+      },
+    });
+
+    geoLayer.addTo(map);
+    geojsonLayerRef.current = geoLayer;
+
+    if (showLabels) {
+      markersGroup.addTo(map);
+      markersLayerRef.current = markersGroup;
+    }
+  }, [
+    geojsonData,
+    snapshots,
+    selectedIndicator,
+    selectedTileTheme,
+    showLabels,
+    euCountriesMap,
+    getCountryFill,
+    getShortValueText,
+    getPrimarySource,
+    onSelectCountry,
+  ]);
+
+  // Recadrer l'Europe
+  const handleResetBounds = () => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    const europeBounds = L.latLngBounds(
+      L.latLng(34.0, -11.0),
+      L.latLng(71.0, 35.0),
+    );
+    map.flyToBounds(europeBounds, { duration: 0.8, padding: [20, 20] });
   };
 
-  // Détermination de la couleur d'un pays selon l'indicateur sélectionné
-  const getCountryFill = (countryCode: string): string => {
-    const s = snapshots[countryCode];
-    if (!s) return '#cbd5e1';
+  // Zoomer directement sur un pays via le sélecteur
+  const handleZoomToCountry = (code: string) => {
+    const map = mapInstanceRef.current;
+    if (!map || !geojsonData || !Array.isArray(geojsonData.features)) return;
 
-    if (selectedIndicator === 'carbonIntensity') {
-      const ci = s.carbonIntensity;
-      if (ci === null) return '#cbd5e1';
-      if (ci <= 50) return '#10b981'; // Vert vif (< 50g)
-      if (ci <= 100) return '#34d399'; // Vert doux (50-100g)
-      if (ci <= 200) return '#fbbf24'; // Jaune (100-200g)
-      if (ci <= 350) return '#f97316'; // Orange (200-350g)
-      if (ci <= 500) return '#ef4444'; // Rouge (350-500g)
-      return '#991b1b'; // Rouge foncé (> 500g)
+    const feature = geojsonData.features.find((f: any) => f?.properties?.ISO2 === code);
+    if (feature && feature.properties?.LAT && feature.properties?.LON) {
+      map.flyTo([feature.properties.LAT, feature.properties.LON], 5.5, {
+        duration: 0.8,
+      });
+      onSelectCountry(code);
     }
-
-    if (selectedIndicator === 'renewableShare') {
-      const ren = s.renewablePercentage;
-      if (ren === null) return '#cbd5e1';
-      if (ren >= 80) return '#059669';
-      if (ren >= 60) return '#10b981';
-      if (ren >= 40) return '#34d399';
-      if (ren >= 20) return '#a7f3d0';
-      return '#e2e8f0';
-    }
-
-    if (selectedIndicator === 'carbonFreeShare') {
-      const cf = s.fossilFreePercentage;
-      if (cf === null) return '#cbd5e1';
-      if (cf >= 85) return '#4f46e5';
-      if (cf >= 70) return '#6366f1';
-      if (cf >= 50) return '#818cf8';
-      if (cf >= 30) return '#c7d2fe';
-      return '#e2e8f0';
-    }
-
-    if (selectedIndicator === 'totalLoad') {
-      const load = s.totalConsumption;
-      if (load === null) return '#cbd5e1';
-      if (load >= 40000) return '#0284c7';
-      if (load >= 20000) return '#0ea5e9';
-      if (load >= 8000) return '#38bdf8';
-      if (load >= 2000) return '#7dd3fc';
-      return '#bae6fd';
-    }
-
-    if (selectedIndicator === 'primarySource') {
-      return getPrimarySource(s).color;
-    }
-
-    return '#94a3b8';
   };
 
-  const hoveredSnapshot = hoveredCountry ? snapshots[hoveredCountry] : null;
-  const hoveredCountryConfig = hoveredCountry ? EU_COUNTRIES.find((c) => c.code === hoveredCountry) : null;
+  const filteredCountries = EU_COUNTRIES.filter(
+    (c) =>
+      c.nameFr.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.code.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
 
   return (
-    <div className="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-xs p-4 sm:p-6">
-      {/* En-tête de la carte & Sélecteur d'indicateur */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-700/60">
+    <div
+      className={`bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-xs transition-all duration-300 ${
+        isExpanded ? 'p-4 sm:p-6' : 'p-4 sm:p-6'
+      }`}
+    >
+      {/* Barre d'outils supérieure */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-700/60">
         <div>
-          <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <span>Carte de l'Union Européenne</span>
-            <span className="text-xs font-normal text-slate-500 dark:text-slate-400">
-              (27 pays membres)
-            </span>
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <span>Carte Réaliste de l'Union Européenne</span>
+              <span className="text-xs font-semibold bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 px-2 py-0.5 rounded-full">
+                27 Pays UE
+              </span>
+            </h2>
+          </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Survolez ou cliquez sur un pays pour consulter les détails électriques.
+            Cartographie géographique interactive des réseaux électriques. Survolez ou cliquez sur un pays.
           </p>
         </div>
 
-        {/* Sélecteur d'indicateur */}
-        <div className="flex items-center gap-2">
-          <label htmlFor="indicator-select" className="text-xs font-medium text-slate-600 dark:text-slate-300">
-            Indicateur :
-          </label>
-          <select
-            id="indicator-select"
-            value={selectedIndicator}
-            onChange={(e) => onSelectIndicator(e.target.value as IndicatorMode)}
-            className="text-xs font-semibold bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-sky-500 cursor-pointer shadow-2xs"
+        {/* Contrôles et sélecteurs */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          {/* Sélecteur d'indicateur énergétique */}
+          <div className="flex items-center gap-1.5">
+            <label htmlFor="map-indicator-select" className="text-xs font-medium text-slate-600 dark:text-slate-300">
+              Indicateur :
+            </label>
+            <select
+              id="map-indicator-select"
+              value={selectedIndicator}
+              onChange={(e) => onSelectIndicator(e.target.value as IndicatorMode)}
+              className="text-xs font-semibold bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-sky-500 cursor-pointer shadow-2xs"
+            >
+              <option value="carbonIntensity">Intensité carbone (gCO₂eq/kWh)</option>
+              <option value="renewableShare">Part renouvelable (%)</option>
+              <option value="carbonFreeShare">Part sans fossile (%)</option>
+              <option value="totalLoad">Consommation électrique (GW)</option>
+              <option value="primarySource">Source principale de production</option>
+            </select>
+          </div>
+
+          {/* Sélecteur de style de fond cartographique */}
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900/80 p-1 rounded-lg border border-slate-200 dark:border-slate-700/80 text-xs">
+            <button
+              onClick={() => setSelectedTileTheme('positron')}
+              className={`px-2 py-1 rounded-md font-medium transition cursor-pointer ${
+                selectedTileTheme === 'positron'
+                  ? 'bg-white dark:bg-slate-800 text-sky-700 dark:text-sky-300 shadow-2xs font-semibold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+              title="Fond clair détaillé (CartoDB Positron)"
+            >
+              Clair
+            </button>
+            <button
+              onClick={() => setSelectedTileTheme('dark')}
+              className={`px-2 py-1 rounded-md font-medium transition cursor-pointer ${
+                selectedTileTheme === 'dark'
+                  ? 'bg-white dark:bg-slate-800 text-sky-700 dark:text-sky-300 shadow-2xs font-semibold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+              title="Fond sombre moderne (CartoDB Dark)"
+            >
+              Sombre
+            </button>
+            <button
+              onClick={() => setSelectedTileTheme('none')}
+              className={`px-2 py-1 rounded-md font-medium transition cursor-pointer ${
+                selectedTileTheme === 'none'
+                  ? 'bg-white dark:bg-slate-800 text-sky-700 dark:text-sky-300 shadow-2xs font-semibold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+              title="Rendu vectoriel pur (sans tuiles externes)"
+            >
+              Épuré
+            </button>
+          </div>
+
+          {/* Bascule afficher / masquer les étiquettes */}
+          <button
+            onClick={() => setShowLabels(!showLabels)}
+            className={`p-1.5 rounded-lg border transition cursor-pointer ${
+              showLabels
+                ? 'bg-sky-50 dark:bg-sky-950/60 border-sky-300 dark:border-sky-800 text-sky-700 dark:text-sky-300'
+                : 'bg-slate-50 dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-slate-500 hover:text-slate-700'
+            }`}
+            title={showLabels ? 'Masquer les pastilles pays' : 'Afficher les pastilles pays'}
           >
-            <option value="carbonIntensity">Intensité carbone (gCO₂eq/kWh)</option>
-            <option value="renewableShare">Part renouvelable (%)</option>
-            <option value="carbonFreeShare">Part bas-carbone (%)</option>
-            <option value="totalLoad">Charge consommée (GW)</option>
-            <option value="primarySource">Source principale de production</option>
-          </select>
+            {showLabels ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+          </button>
+
+          {/* Bouton recentrer sur l'Europe */}
+          <button
+            onClick={handleResetBounds}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            title="Recentrer la carte sur l'ensemble de l'UE"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+            <span className="hidden sm:inline">Recentrer</span>
+          </button>
+
+          {/* Bouton agrandir / réduire */}
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
+            title={isExpanded ? 'Réduire la hauteur' : 'Agrandir la carte'}
+          >
+            {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          </button>
         </div>
       </div>
 
-      {/* Surface de la carte SVG */}
-      <div className="relative mt-4 bg-slate-50/70 dark:bg-slate-900/50 rounded-xl overflow-hidden border border-slate-100 dark:border-slate-800 flex items-center justify-center min-h-[460px]">
-        <svg
-          viewBox="100 80 820 820"
-          className="w-full h-auto max-h-[560px] select-none"
-          role="img"
-          aria-label="Carte des 27 pays de l'Union européenne"
-        >
-          <defs>
-            {/* Lignes d'interconnexion / flux décoratives douces */}
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-slate-200 dark:text-slate-800" />
-            </pattern>
-          </defs>
+      {/* Surface de la carte Leaflet */}
+      <div className="relative mt-4 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 shadow-inner">
+        {/* Conteneur DOM Leaflet */}
+        <div
+          ref={mapContainerRef}
+          style={{ height: isExpanded ? '680px' : '520px' }}
+          className="w-full relative z-0"
+        />
 
-          <rect x="100" y="80" width="820" height="820" fill="url(#grid)" opacity="0.6" />
-
-          {/* Tracé des liaisons électriques entre pays voisins */}
-          <g className="interconnections stroke-slate-300 dark:stroke-slate-700 stroke-1 stroke-dasharray-[2,2] opacity-60">
-            {EU_COUNTRIES.map((c1) =>
-              c1.neighbors.map((nCode) => {
-                const c2 = EU_COUNTRIES.find((x) => x.code === nCode);
-                if (!c2 || c1.code > c2.code) return null; // Tracer une seule fois
-                return (
-                  <line
-                    key={`${c1.code}-${c2.code}`}
-                    x1={c1.mapCoord.x}
-                    y1={c1.mapCoord.y}
-                    x2={c2.mapCoord.x}
-                    y2={c2.mapCoord.y}
-                  />
-                );
-              }),
-            )}
-          </g>
-
-          {/* Bulles et Polygones interactifs pour chaque pays */}
-          {EU_COUNTRIES.map((country: EUCountryConfig) => {
-            const isHovered = hoveredCountry === country.code;
-            const fill = getCountryFill(country.code);
-            const snapshot = snapshots[country.code];
-
-            return (
-              <g
-                key={country.code}
-                role="button"
-                tabIndex={0}
-                aria-label={`${country.nameFr}, ${snapshot?.carbonIntensity ?? 'N/A'} gCO2eq/kWh`}
-                onClick={() => onSelectCountry(country.code)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    onSelectCountry(country.code);
-                  }
-                }}
-                onMouseEnter={(e) => {
-                  setHoveredCountry(country.code);
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
-                }}
-                onMouseLeave={() => setHoveredCountry(null)}
-                className="cursor-pointer transition-transform duration-150 focus:outline-hidden group"
-              >
-                {/* Anneau de focus et de survol */}
-                {isHovered && (
-                  <circle
-                    cx={country.mapCoord.x}
-                    cy={country.mapCoord.y}
-                    r={34}
-                    fill="none"
-                    stroke="#0284c7"
-                    strokeWidth={3}
-                    className="animate-pulse"
-                  />
-                )}
-
-                {/* Cercle pays */}
-                <circle
-                  cx={country.mapCoord.x}
-                  cy={country.mapCoord.y}
-                  r={isHovered ? 28 : 24}
-                  fill={fill}
-                  stroke="#ffffff"
-                  strokeWidth={2}
-                  className="transition-all duration-200 shadow-lg drop-shadow-sm group-hover:filter group-hover:brightness-110"
-                />
-
-                {/* Code ISO au centre */}
-                <text
-                  x={country.mapCoord.x}
-                  y={country.mapCoord.y - 3}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  className="fill-white font-bold text-[11px] pointer-events-none drop-shadow-sm select-none"
-                >
-                  {country.code}
-                </text>
-
-                {/* Petite valeur numérique sous le code */}
-                <text
-                  x={country.mapCoord.x}
-                  y={country.mapCoord.y + 9}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  className="fill-white font-medium text-[9px] pointer-events-none select-none opacity-95"
-                >
-                  {selectedIndicator === 'carbonIntensity' && (snapshot?.carbonIntensity !== null ? `${snapshot?.carbonIntensity}g` : '—')}
-                  {selectedIndicator === 'renewableShare' && (snapshot?.renewablePercentage !== null ? `${snapshot?.renewablePercentage}%` : '—')}
-                  {selectedIndicator === 'carbonFreeShare' && (snapshot?.fossilFreePercentage !== null ? `${snapshot?.fossilFreePercentage}%` : '—')}
-                  {selectedIndicator === 'totalLoad' && (snapshot?.totalConsumption !== null ? `${Math.round((snapshot?.totalConsumption ?? 0) / 1000)}GW` : '—')}
-                  {selectedIndicator === 'primarySource' && (snapshot ? getPrimarySource(snapshot).label.slice(0, 4) : '—')}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
-
-        {/* Tooltip flottant au survol */}
-        {hoveredCountry && hoveredCountryConfig && (
-          <div
-            className="absolute z-20 pointer-events-none bg-slate-900/95 text-white p-3 rounded-xl shadow-2xl border border-slate-700 max-w-xs text-xs backdrop-blur-md transition-all duration-150 animate-in fade-in zoom-in-95"
-            style={{
-              top: Math.max(16, hoveredCountryConfig.mapCoord.y - 120),
-              left: Math.min(600, Math.max(20, hoveredCountryConfig.mapCoord.x - 100)),
-            }}
-          >
-            <div className="flex items-center justify-between gap-2 border-b border-slate-700/80 pb-1.5 mb-2">
-              <span className="font-bold text-sm flex items-center gap-1.5">
-                <span>{hoveredCountryConfig.flag}</span>
-                <span>{hoveredCountryConfig.nameFr}</span>
-              </span>
-              {hoveredSnapshot && (
-                <DataQualityBadge
-                  status={hoveredSnapshot.dataSourceQuality}
-                  isEstimated={hoveredSnapshot.isEstimated}
-                  estimationMethod={hoveredSnapshot.estimationMethod}
-                  showText={true}
-                />
-              )}
-            </div>
-
-            {hoveredSnapshot ? (
-              <div className="space-y-1">
-                <div className="flex justify-between items-center text-slate-300">
-                  <span>Intensité carbone :</span>
-                  <UnitFormattedValue
-                    value={hoveredSnapshot.carbonIntensity}
-                    unit="gCO2eq/kWh"
-                    className="text-white font-semibold"
-                  />
-                </div>
-                <div className="flex justify-between items-center text-slate-300">
-                  <span>Bas-carbone (sans fossile) :</span>
-                  <UnitFormattedValue
-                    value={hoveredSnapshot.fossilFreePercentage}
-                    unit="%"
-                    className="text-indigo-300 font-semibold"
-                  />
-                </div>
-                <div className="flex justify-between items-center text-slate-300">
-                  <span>Renouvelable :</span>
-                  <UnitFormattedValue
-                    value={hoveredSnapshot.renewablePercentage}
-                    unit="%"
-                    className="text-emerald-300 font-semibold"
-                  />
-                </div>
-                <div className="flex justify-between items-center text-slate-300">
-                  <span>Charge consommée :</span>
-                  <UnitFormattedValue
-                    value={hoveredSnapshot.totalConsumption}
-                    unit="GW"
-                    className="text-sky-300 font-semibold"
-                  />
-                </div>
-                <div className="flex justify-between items-center text-slate-300">
-                  <span>Source principale :</span>
-                  <span className="font-semibold text-amber-300">
-                    {getPrimarySource(hoveredSnapshot).label}
-                  </span>
-                </div>
-                <div className="pt-1.5 mt-1 border-t border-slate-800 text-[10px] text-slate-400 flex justify-between">
-                  <span>Relevé :</span>
-                  <span>{new Date(hoveredSnapshot.datetime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
-                </div>
-              </div>
-            ) : (
-              <p className="text-slate-400 italic">Données en cours de synchronisation...</p>
-            )}
-
-            <div className="mt-2 text-center text-[10px] text-sky-400 font-medium">
-              Cliquez pour ouvrir la fiche pays complète →
-            </div>
+        {/* Écran de chargement du GeoJSON */}
+        {isLoadingGeo && (
+          <div className="absolute inset-0 z-20 bg-slate-900/40 backdrop-blur-xs flex flex-col items-center justify-center text-white">
+            <div className="w-8 h-8 border-3 border-sky-400 border-t-transparent rounded-full animate-spin mb-2" />
+            <span className="text-xs font-semibold">Chargement des frontières géographiques de l'Europe...</span>
           </div>
         )}
+
+        {/* Message d'erreur de chargement */}
+        {loadError && (
+          <div className="absolute top-4 left-4 right-4 z-20 p-3 bg-rose-50 dark:bg-rose-950/80 border border-rose-300 dark:border-rose-800 rounded-xl text-xs text-rose-800 dark:text-rose-200 flex items-center justify-between">
+            <span>{loadError}</span>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-2 py-1 rounded bg-rose-600 text-white font-medium hover:bg-rose-700"
+            >
+              Recharger
+            </button>
+          </div>
+        )}
+
+        {/* Barre de recherche rapide de pays en overlay sur la carte (en haut à droite) */}
+        <div className="absolute top-3 right-3 z-10 hidden sm:block max-w-xs">
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Aller à un pays (ex: France, DE)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-48 focus:w-60 transition-all text-xs pl-8 pr-2.5 py-1.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white shadow-md focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+            />
+            {searchQuery && (
+              <div className="absolute top-full right-0 mt-1 w-60 max-h-48 overflow-y-auto bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-1">
+                {filteredCountries.slice(0, 6).map((c) => (
+                  <button
+                    key={c.code}
+                    onClick={() => {
+                      handleZoomToCountry(c.code);
+                      setSearchQuery('');
+                    }}
+                    className="w-full flex items-center justify-between p-2 rounded-lg text-left text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="text-base">{c.flag}</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-200">{c.nameFr}</span>
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-400">{c.code}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Mini bandeau d'instructions en bas à gauche de la carte */}
+        <div className="absolute bottom-3 left-3 z-10 pointer-events-none hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200 dark:border-slate-700 shadow-sm text-[11px] text-slate-600 dark:text-slate-300">
+          <Info className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+          <span>Zoom molette / Déplacement au glisser • Clic pays = fiche détaillée</span>
+        </div>
       </div>
 
       {/* Légende didactique sous la carte */}
       <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/60 flex flex-wrap items-center justify-between gap-3 text-xs">
-        <span className="font-medium text-slate-600 dark:text-slate-400">
-          Échelle :
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="font-bold text-slate-700 dark:text-slate-300">
+            Légende :
+          </span>
 
-        {selectedIndicator === 'carbonIntensity' && (
-          <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-600 dark:text-slate-400">
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block" /> &lt; 50g (Très faible)
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-emerald-400 inline-block" /> 50 - 100g (Faible)
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-amber-400 inline-block" /> 100 - 200g (Moyen)
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-orange-500 inline-block" /> 200 - 350g (Élevé)
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-red-700 inline-block" /> &gt; 350g (Très élevé)
-            </span>
-          </div>
-        )}
+          {selectedIndicator === 'carbonIntensity' && (
+            <div className="flex items-center gap-2.5 flex-wrap text-[11px] text-slate-600 dark:text-slate-300">
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3 rounded-xs bg-[#10b981] inline-block shadow-2xs" />
+                <span>&lt; 50g (Très bas)</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3 rounded-xs bg-[#34d399] inline-block shadow-2xs" />
+                <span>50 - 100g</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3 rounded-xs bg-[#fbbf24] inline-block shadow-2xs" />
+                <span>100 - 200g</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3 rounded-xs bg-[#f97316] inline-block shadow-2xs" />
+                <span>200 - 350g</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3 rounded-xs bg-[#ef4444] inline-block shadow-2xs" />
+                <span>350 - 500g</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3 rounded-xs bg-[#991b1b] inline-block shadow-2xs" />
+                <span>&gt; 500g (Élevé)</span>
+              </span>
+            </div>
+          )}
 
-        {selectedIndicator === 'renewableShare' && (
-          <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-600 dark:text-slate-400">
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-emerald-700 inline-block" /> &gt; 80%
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block" /> 60 - 80%
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-emerald-300 inline-block" /> 40 - 60%
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-emerald-100 border border-slate-300 inline-block" /> &lt; 20%
-            </span>
-          </div>
-        )}
+          {selectedIndicator === 'renewableShare' && (
+            <div className="flex items-center gap-2.5 flex-wrap text-[11px] text-slate-600 dark:text-slate-300">
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3 rounded-xs bg-[#047857] inline-block shadow-2xs" />
+                <span>&gt; 80%</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3 rounded-xs bg-[#10b981] inline-block shadow-2xs" />
+                <span>60 - 80%</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3 rounded-xs bg-[#34d399] inline-block shadow-2xs" />
+                <span>40 - 60%</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3 rounded-xs bg-[#a7f3d0] inline-block shadow-2xs" />
+                <span>20 - 40%</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3 rounded-xs bg-[#e2e8f0] border border-slate-300 inline-block shadow-2xs" />
+                <span>&lt; 20%</span>
+              </span>
+            </div>
+          )}
 
-        {selectedIndicator === 'carbonFreeShare' && (
-          <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-600 dark:text-slate-400">
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-indigo-700 inline-block" /> &gt; 85%
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-indigo-500 inline-block" /> 70 - 85%
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-indigo-300 inline-block" /> 50 - 70%
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-slate-200 inline-block" /> &lt; 30%
-            </span>
-          </div>
-        )}
+          {selectedIndicator === 'carbonFreeShare' && (
+            <div className="flex items-center gap-2.5 flex-wrap text-[11px] text-slate-600 dark:text-slate-300">
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3 rounded-xs bg-[#4338ca] inline-block shadow-2xs" />
+                <span>&gt; 85%</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3 rounded-xs bg-[#6366f1] inline-block shadow-2xs" />
+                <span>70 - 85%</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3 rounded-xs bg-[#818cf8] inline-block shadow-2xs" />
+                <span>50 - 70%</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3 rounded-xs bg-[#c7d2fe] inline-block shadow-2xs" />
+                <span>30 - 50%</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3 rounded-xs bg-[#e2e8f0] inline-block shadow-2xs" />
+                <span>&lt; 30%</span>
+              </span>
+            </div>
+          )}
 
-        {selectedIndicator === 'totalLoad' && (
-          <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-600 dark:text-slate-400">
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-sky-700 inline-block" /> &gt; 40 GW
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-sky-500 inline-block" /> 20 - 40 GW
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-sky-300 inline-block" /> 8 - 20 GW
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-sky-100 border border-slate-300 inline-block" /> &lt; 8 GW
-            </span>
-          </div>
-        )}
+          {selectedIndicator === 'totalLoad' && (
+            <div className="flex items-center gap-2.5 flex-wrap text-[11px] text-slate-600 dark:text-slate-300">
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3 rounded-xs bg-[#0369a1] inline-block shadow-2xs" />
+                <span>&gt; 45 GW</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3 rounded-xs bg-[#0ea5e9] inline-block shadow-2xs" />
+                <span>25 - 45 GW</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3 rounded-xs bg-[#38bdf8] inline-block shadow-2xs" />
+                <span>10 - 25 GW</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3 rounded-xs bg-[#7dd3fc] inline-block shadow-2xs" />
+                <span>3 - 10 GW</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3 rounded-xs bg-[#bae6fd] inline-block shadow-2xs" />
+                <span>&lt; 3 GW</span>
+              </span>
+            </div>
+          )}
 
-        {selectedIndicator === 'primarySource' && (
-          <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-600 dark:text-slate-400">
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-indigo-400 inline-block" /> Nucléaire
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-sky-400 inline-block" /> Hydro
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-emerald-400 inline-block" /> Éolien
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-yellow-400 inline-block" /> Solaire
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-orange-400 inline-block" /> Gaz
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-zinc-600 inline-block" /> Charbon
-            </span>
-          </div>
-        )}
+          {selectedIndicator === 'primarySource' && (
+            <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-600 dark:text-slate-300">
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-[#818cf8] inline-block" /> Nucléaire
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-[#38bdf8] inline-block" /> Hydro
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-[#34d399] inline-block" /> Éolien
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-[#fbbf24] inline-block" /> Solaire
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-[#fb923c] inline-block" /> Gaz
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-[#52525b] inline-block" /> Charbon
+              </span>
+            </div>
+          )}
+        </div>
 
-        <div className="text-[11px] text-slate-400">
-          Source : Electricity Maps (généré à partir des données ENTSO-E)
+        <div className="flex items-center gap-3 text-[11px] text-slate-400">
+          <span>Projection géographique réelle WGS84</span>
+          <span>•</span>
+          <span>Bordures officielles UE</span>
         </div>
       </div>
     </div>

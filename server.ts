@@ -19,6 +19,9 @@ const API_KEY = process.env.ELECTRICITY_MAPS_API_KEY || process.env.EMAPS_TOKEN 
 const V4_BASE = 'https://api.electricitymaps.com/v4';
 const V3_BASE = 'https://api.electricitymap.org/v3';
 
+// Configuration API CARTO Basemaps
+const CARTO_API_KEY = process.env.CARTO_API_KEY || 'cb1_401f_1_81e88d5ab80e13c7924b8b1d';
+
 // Cache mémoire serveur (TTL 5 minutes)
 interface ServerCacheEntry<T> {
   data: T;
@@ -243,10 +246,46 @@ app.get('/api/electricity-maps/history', async (req: Request, res: Response) => 
   return res.json(payload);
 });
 
+// Proxy sécurisé pour les tuiles de fond cartographique CARTO Basemaps avec clé API injectée côté serveur
+app.get('/api/carto/tiles/:style/:z/:x/:y.png', async (req: Request, res: Response) => {
+  const { style, z, x, y } = req.params;
+  const validStyles = ['light_all', 'dark_all', 'rastertiles', 'light_nolabels', 'dark_nolabels', 'voyager'];
+  const targetStyle = validStyles.includes(style) ? style : 'light_all';
+
+  // Format officiel CARTO rastertiles avec clé API fournie
+  const cartoUrl = `https://a.basemaps.cartocdn.com/rastertiles/${targetStyle}/${z}/${x}/${y}.png?api_key=${encodeURIComponent(CARTO_API_KEY)}`;
+
+  try {
+    const upstreamRes = await fetch(cartoUrl);
+    if (!upstreamRes.ok) {
+      // Si CARTO upstream renvoie une erreur, tenter le fallback OSM ou renvoyer le code
+      return res.status(upstreamRes.status).send('Erreur lors du chargement de la tuile cartographique');
+    }
+
+    const contentType = upstreamRes.headers.get('content-type') || 'image/png';
+    const buffer = await upstreamRes.arrayBuffer();
+
+    // Mise en cache navigateur et CDN : 24h
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+    return res.send(Buffer.from(buffer));
+  } catch (err) {
+    console.error('[CARTO Proxy] Erreur réseau:', err);
+    return res.status(502).send('Passerelle introuvable');
+  }
+});
+
 // --- GESTION DU SERVEUR / VITE ---
 async function startServer() {
+  // Servir les fichiers statiques du dossier public (cartes GeoJSON, icônes, manifest)
+  app.use(express.static(path.resolve(process.cwd(), 'public')));
+
   if (process.env.NODE_ENV !== 'production') {
     // Mode développement : brancher le middleware Vite
+    // Assurer que tsx n'injecte pas de __dirname non absolu pouvant perturber les plugins ESM Vite (ex: vite-plugin-pwa)
+    delete (globalThis as Record<string, unknown>).__dirname;
+    delete (globalThis as Record<string, unknown>).__filename;
+
     const { createServer } = await import('vite');
     const vite = await createServer({
       server: { middlewareMode: true },
@@ -255,9 +294,9 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     // Mode production : servir le dossier dist
-    app.use(express.static(path.resolve(__dirname, 'dist')));
+    app.use(express.static(path.resolve(process.cwd(), 'dist')));
     app.get('*', (_req: Request, res: Response) => {
-      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+      res.sendFile(path.resolve(process.cwd(), 'dist', 'index.html'));
     });
   }
 

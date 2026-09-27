@@ -231,7 +231,7 @@ export function normalizeCountrySnapshot(
  * Calcule la synthèse de l'UE à partir d'une collection d'instantanés
  */
 export function computeEUSummary(snapshots: Record<string, CountryElectricitySnapshot>) {
-  const validSnapshots = Object.values(snapshots).filter((s) => s.carbonIntensity !== null);
+  const validSnapshots = Object.values(snapshots || {}).filter((s) => s && s.carbonIntensity !== null);
 
   if (validSnapshots.length === 0) {
     return {

@@ -17,6 +17,7 @@ import { RenewablesView } from './components/renewables/RenewablesView';
 import { FlowsView } from './components/flows/FlowsView';
 import { Footer } from './components/common/Footer';
 import { OfflineIndicator } from './components/common/OfflineIndicator';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 const POLLING_INTERVAL_SECONDS = 300; // 5 minutes
 
@@ -133,7 +134,8 @@ export default function App() {
 
       {/* Contenu principal */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {isLoading && Object.keys(snapshots).length === 0 ? (
+        <ErrorBoundary>
+        {isLoading && Object.keys(snapshots || {}).length === 0 ? (
           <div className="min-h-[400px] flex flex-col items-center justify-center gap-3">
             <div className="w-10 h-10 border-4 border-sky-600 border-t-transparent rounded-full animate-spin" />
             <p className="text-xs text-slate-500 font-medium">
@@ -153,12 +155,14 @@ export default function App() {
                   coveredCountriesCount={euSummary.coveredCountriesCount}
                 />
 
-                <EUEnergyMap
-                  snapshots={snapshots}
-                  selectedIndicator={selectedIndicator}
-                  onSelectIndicator={setSelectedIndicator}
-                  onSelectCountry={handleSelectCountry}
-                />
+                <ErrorBoundary>
+                  <EUEnergyMap
+                    snapshots={snapshots}
+                    selectedIndicator={selectedIndicator}
+                    onSelectIndicator={setSelectedIndicator}
+                    onSelectCountry={handleSelectCountry}
+                  />
+                </ErrorBoundary>
 
                 <EUTable
                   snapshots={snapshots}
@@ -209,6 +213,7 @@ export default function App() {
             )}
           </>
         )}
+        </ErrorBoundary>
       </main>
 
       {/* Indicateur PWA Hors-Ligne */}

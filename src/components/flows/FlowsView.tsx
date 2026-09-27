@@ -16,8 +16,10 @@ export const FlowsView: React.FC<FlowsViewProps> = ({ snapshots, onSelectCountry
   const allFlows: CrossBorderFlow[] = [];
   const flowKeys = new Set<string>();
 
-  for (const s of Object.values(snapshots)) {
+  for (const s of Object.values(snapshots || {})) {
+    if (!s || !Array.isArray(s.exchangeFlows)) continue;
     for (const f of s.exchangeFlows) {
+      if (!f) continue;
       const key = `${f.fromZone}->${f.toZone}`;
       if (!flowKeys.has(key)) {
         flowKeys.add(key);

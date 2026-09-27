@@ -4,6 +4,39 @@ import { EU_REFERENCE_SNAPSHOTS, generateReferenceHistory } from '../../data/ref
 
 const IN_FLIGHT_PROMISES = new Map<string, Promise<unknown>>();
 
+function sanitizeSnapshot(s: CountryElectricitySnapshot): CountryElectricitySnapshot {
+  if (!s) return s;
+  return {
+    ...s,
+    exchangeFlows: Array.isArray(s.exchangeFlows) ? s.exchangeFlows : [],
+    productionBreakdown: s.productionBreakdown || {
+      nuclear: null,
+      geothermal: null,
+      biomass: null,
+      coal: null,
+      wind: null,
+      solar: null,
+      hydro: null,
+      gas: null,
+      oil: null,
+      unknown: null,
+    },
+    subZones: Array.isArray(s.subZones) ? s.subZones : [],
+  };
+}
+
+function sanitizeSummary(res: EUSummaryResponse): EUSummaryResponse {
+  if (!res || !res.snapshots) return res;
+  const sanitizedSnapshots: Record<string, CountryElectricitySnapshot> = {};
+  for (const [code, s] of Object.entries(res.snapshots)) {
+    sanitizedSnapshots[code] = sanitizeSnapshot(s);
+  }
+  return {
+    ...res,
+    snapshots: sanitizedSnapshots,
+  };
+}
+
 export interface EUSummaryResponse {
   snapshots: Record<string, CountryElectricitySnapshot>;
   isDemoFallback: boolean;
@@ -28,7 +61,7 @@ export class ElectricityMapsClient {
 
     if (!forceRefresh) {
       const cached = clientCache.get<EUSummaryResponse>(cacheKey);
-      if (cached) return cached;
+      if (cached) return sanitizeSummary(cached);
     }
 
     if (IN_FLIGHT_PROMISES.has(cacheKey)) {
@@ -45,26 +78,27 @@ export class ElectricityMapsClient {
           throw new Error(`HTTP ${res.status} lors de la récupération du résumé UE`);
         }
 
-        const data: EUSummaryResponse = await res.json();
+        const rawData: EUSummaryResponse = await res.json();
+        const data = sanitizeSummary(rawData);
         clientCache.set(cacheKey, data, 5 * 60 * 1000); // 5 min TTL
         return data;
       } catch (err) {
         console.warn('Erreur réseau ou proxy, vérification du cache stale ou fallback:', err);
         const stale = clientCache.getStale<EUSummaryResponse>(cacheKey);
         if (stale) {
-          return {
+          return sanitizeSummary({
             ...stale.data,
             source: 'Cache hors-ligne local',
-          };
+          });
         }
 
         // Fallback ultime sur données de référence certifiées
-        return {
+        return sanitizeSummary({
           snapshots: EU_REFERENCE_SNAPSHOTS,
           isDemoFallback: true,
           source: 'Données de référence vérifiées (Mode dégradé)',
           timestamp: new Date().toISOString(),
-        };
+        });
       } finally {
         IN_FLIGHT_PROMISES.delete(cacheKey);
       }
@@ -82,7 +116,7 @@ export class ElectricityMapsClient {
 
     if (!forceRefresh) {
       const cached = clientCache.get<CountryElectricitySnapshot>(cacheKey);
-      if (cached) return cached;
+      if (cached) return sanitizeSnapshot(cached);
     }
 
     if (IN_FLIGHT_PROMISES.has(cacheKey)) {
@@ -95,17 +129,18 @@ export class ElectricityMapsClient {
         if (!res.ok) {
           throw new Error(`Erreur HTTP ${res.status} pour la zone ${zoneKey}`);
         }
-        const data: CountryElectricitySnapshot = await res.json();
+        const rawData: CountryElectricitySnapshot = await res.json();
+        const data = sanitizeSnapshot(rawData);
         clientCache.set(cacheKey, data, 5 * 60 * 1000);
         return data;
       } catch (err) {
         console.warn(`Snapshot pour ${zoneKey} indisponible, récupération secours :`, err);
         const stale = clientCache.getStale<CountryElectricitySnapshot>(cacheKey);
-        if (stale) return stale.data;
+        if (stale) return sanitizeSnapshot(stale.data);
 
         // Fallback par pays
         const ref = EU_REFERENCE_SNAPSHOTS[zoneKey];
-        if (ref) return ref;
+        if (ref) return sanitizeSnapshot(ref);
 
         throw err;
       } finally {
@@ -123,7 +158,7 @@ export class ElectricityMapsClient {
   async getZoneHistory(zoneKey: string): Promise<CountryHistoryData> {
     const cacheKey = `zone_history_${zoneKey}`;
     const cached = clientCache.get<CountryHistoryData>(cacheKey);
-    if (cached) return cached;
+    if (cached && Array.isArray(cached.history)) return cached;
 
     try {
       const res = await fetch(`${this.baseUrl}/history?zone=${encodeURIComponent(zoneKey)}`);
@@ -132,8 +167,8 @@ export class ElectricityMapsClient {
       }
       const data: ZoneHistoryResponse = await res.json();
       const result: CountryHistoryData = {
-        zoneKey: data.zoneKey,
-        history: data.history,
+        zoneKey: data?.zoneKey || zoneKey,
+        history: Array.isArray(data?.history) ? data.history : [],
       };
       clientCache.set(cacheKey, result, 15 * 60 * 1000);
       return result;
@@ -143,7 +178,7 @@ export class ElectricityMapsClient {
       const history = generateReferenceHistory(zoneKey, baseIntensity);
       return {
         zoneKey,
-        history,
+        history: Array.isArray(history) ? history : [],
       };
     }
   }

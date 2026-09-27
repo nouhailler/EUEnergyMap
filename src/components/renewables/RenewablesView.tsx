@@ -22,7 +22,8 @@ export const RenewablesView: React.FC<RenewablesViewProps> = ({
   let totalBiomassMW = 0;
   let totalGeothermalMW = 0;
 
-  for (const s of Object.values(snapshots)) {
+  for (const s of Object.values(snapshots || {})) {
+    if (!s?.productionBreakdown) continue;
     totalSolarMW += s.productionBreakdown.solar ?? 0;
     totalWindMW += s.productionBreakdown.wind ?? 0;
     totalHydroMW += s.productionBreakdown.hydro ?? 0;

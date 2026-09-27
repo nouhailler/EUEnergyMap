@@ -12,6 +12,17 @@ const DEFAULT_TTL_MS = 5 * 60 * 1000; // 5 minutes
 class ClientCache {
   private memoryCache = new Map<string, CacheEntry<unknown>>();
 
+  private getStorage(): Storage | null {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return window.localStorage;
+      }
+    } catch {
+      // Access to localStorage may be denied in strict iframes
+    }
+    return null;
+  }
+
   get<T>(key: string): T | null {
     // 1. Vérification cache mémoire
     const mem = this.memoryCache.get(key);
@@ -22,13 +33,16 @@ class ClientCache {
 
     // 2. Vérification localStorage
     try {
-      const stored = localStorage.getItem(STORAGE_PREFIX + key);
-      if (stored) {
-        const parsed: CacheEntry<T> = JSON.parse(stored);
-        if (parsed.expiresAt > now) {
-          // Restaurer dans le cache mémoire
-          this.memoryCache.set(key, parsed);
-          return parsed.data;
+      const storage = this.getStorage();
+      if (storage) {
+        const stored = storage.getItem(STORAGE_PREFIX + key);
+        if (stored) {
+          const parsed: CacheEntry<T> = JSON.parse(stored);
+          if (parsed && typeof parsed.expiresAt === 'number' && parsed.expiresAt > now) {
+            // Restaurer dans le cache mémoire
+            this.memoryCache.set(key, parsed);
+            return parsed.data;
+          }
         }
       }
     } catch {
@@ -47,10 +61,15 @@ class ClientCache {
       return { data: mem.data as T, cachedAt: mem.cachedAt };
     }
     try {
-      const stored = localStorage.getItem(STORAGE_PREFIX + key);
-      if (stored) {
-        const parsed: CacheEntry<T> = JSON.parse(stored);
-        return { data: parsed.data, cachedAt: parsed.cachedAt };
+      const storage = this.getStorage();
+      if (storage) {
+        const stored = storage.getItem(STORAGE_PREFIX + key);
+        if (stored) {
+          const parsed: CacheEntry<T> = JSON.parse(stored);
+          if (parsed && parsed.data) {
+            return { data: parsed.data, cachedAt: parsed.cachedAt };
+          }
+        }
       }
     } catch {
       // ignore
@@ -69,7 +88,10 @@ class ClientCache {
     this.memoryCache.set(key, entry);
 
     try {
-      localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(entry));
+      const storage = this.getStorage();
+      if (storage) {
+        storage.setItem(STORAGE_PREFIX + key, JSON.stringify(entry));
+      }
     } catch {
       // Quota localStorage dépassé ou navigation privée stricte
     }
@@ -78,14 +100,18 @@ class ClientCache {
   clear(): void {
     this.memoryCache.clear();
     try {
-      const keysToRemove: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && k.startsWith(STORAGE_PREFIX)) {
-          keysToRemove.push(k);
+      const storage = this.getStorage();
+      if (storage && typeof storage.length === 'number') {
+        const keysToRemove: string[] = [];
+        const len = storage.length;
+        for (let i = 0; i < len; i++) {
+          const k = storage.key(i);
+          if (k && k.startsWith(STORAGE_PREFIX)) {
+            keysToRemove.push(k);
+          }
         }
+        keysToRemove.forEach((k) => storage.removeItem(k));
       }
-      keysToRemove.forEach((k) => localStorage.removeItem(k));
     } catch {
       // ignore
     }

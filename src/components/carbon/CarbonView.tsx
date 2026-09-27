@@ -22,13 +22,16 @@ export const CarbonView: React.FC<CarbonViewProps> = ({ snapshots, onSelectCount
       .getZoneHistory(selectedZone)
       .then((data) => {
         if (isMounted) {
-          setHistory(data.history);
+          setHistory(Array.isArray(data?.history) ? data.history : []);
           setIsLoadingHistory(false);
         }
       })
       .catch((err) => {
         console.warn('Erreur historique zone', err);
-        if (isMounted) setIsLoadingHistory(false);
+        if (isMounted) {
+          setHistory([]);
+          setIsLoadingHistory(false);
+        }
       });
 
     return () => {
@@ -39,8 +42,10 @@ export const CarbonView: React.FC<CarbonViewProps> = ({ snapshots, onSelectCount
   const activeSnapshot = snapshots[selectedZone];
   const activeCountry = EU_COUNTRIES.find((c) => c.code === selectedZone);
 
+  const safeHistory = Array.isArray(history) ? history : [];
+
   // Maximum pour calibrer le graphique SVG d'historique
-  const maxIntensity = Math.max(100, ...history.map((p) => p.carbonIntensity ?? 0));
+  const maxIntensity = Math.max(100, ...safeHistory.map((p) => p.carbonIntensity ?? 0));
 
   return (
     <div className="space-y-6">
@@ -94,10 +99,10 @@ export const CarbonView: React.FC<CarbonViewProps> = ({ snapshots, onSelectCount
             <div className="h-48 flex items-center justify-center text-xs text-slate-400">
               Chargement des relevés horaires...
             </div>
-          ) : history.length > 0 ? (
+          ) : safeHistory.length > 0 ? (
             <div className="space-y-3">
               <div className="h-48 w-full flex items-end gap-1.5 pt-6 pb-2">
-                {history.map((pt, idx) => {
+                {safeHistory.map((pt, idx) => {
                   const val = pt.carbonIntensity ?? 0;
                   const heightPercent = Math.min(100, Math.max(8, (val / maxIntensity) * 100));
                   const hourLabel = new Date(pt.datetime).getUTCHours();
