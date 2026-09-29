@@ -155,10 +155,14 @@ export class ElectricityMapsClient {
   /**
    * Récupère l'historique 24h d'une zone
    */
-  async getZoneHistory(zoneKey: string): Promise<CountryHistoryData> {
+  async getZoneHistory(
+    zoneKey: string,
+    fallbackIntensity?: number,
+    referenceDate?: string | Date
+  ): Promise<CountryHistoryData> {
     const cacheKey = `zone_history_${zoneKey}`;
     const cached = clientCache.get<CountryHistoryData>(cacheKey);
-    if (cached && Array.isArray(cached.history)) return cached;
+    if (cached && Array.isArray(cached.history) && cached.history.length > 0) return cached;
 
     try {
       const res = await fetch(`${this.baseUrl}/history?zone=${encodeURIComponent(zoneKey)}`);
@@ -170,12 +174,15 @@ export class ElectricityMapsClient {
         zoneKey: data?.zoneKey || zoneKey,
         history: Array.isArray(data?.history) ? data.history : [],
       };
-      clientCache.set(cacheKey, result, 15 * 60 * 1000);
-      return result;
+      if (result.history.length > 0) {
+        clientCache.set(cacheKey, result, 15 * 60 * 1000);
+        return result;
+      }
+      throw new Error('Empty history returned');
     } catch {
       const snapshot = EU_REFERENCE_SNAPSHOTS[zoneKey];
-      const baseIntensity = snapshot?.carbonIntensity ?? 150;
-      const history = generateReferenceHistory(zoneKey, baseIntensity);
+      const baseIntensity = fallbackIntensity ?? snapshot?.carbonIntensity ?? 150;
+      const history = generateReferenceHistory(zoneKey, baseIntensity, referenceDate || snapshot?.datetime);
       return {
         zoneKey,
         history: Array.isArray(history) ? history : [],

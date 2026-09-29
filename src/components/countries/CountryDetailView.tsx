@@ -12,11 +12,14 @@ import {
   Layers,
   TrendingDown,
   Info,
+  Radio,
 } from 'lucide-react';
 import { CountryElectricitySnapshot, ProductionSourceKey } from '../../types/energy';
 import { PRODUCTION_SOURCES } from '../../data/sourcesMeta';
 import { UnitFormattedValue } from '../common/UnitFormattedValue';
 import { DataQualityBadge } from '../common/DataQualityBadge';
+import { CountryHistorySection } from './CountryHistorySection';
+import { ApiV4SignalsSection } from './ApiV4SignalsSection';
 
 interface CountryDetailViewProps {
   snapshot: CountryElectricitySnapshot;
@@ -31,6 +34,7 @@ export const CountryDetailView: React.FC<CountryDetailViewProps> = ({
 }) => {
   const [viewMode, setViewMode] = useState<'production' | 'consumption'>('production');
   const [showNetLoadExplainer, setShowNetLoadExplainer] = useState(false);
+  const [showLoadExplainer, setShowLoadExplainer] = useState(false);
 
   // Décomposition des sources
   const breakdown = (viewMode === 'consumption' && snapshot?.consumptionBreakdown)
@@ -94,9 +98,9 @@ export const CountryDetailView: React.FC<CountryDetailViewProps> = ({
         </div>
       </div>
 
-      {/* Cartes d'indicateurs clés */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5">
-        {/* Intensité Carbone */}
+      {/* Cartes d'indicateurs clés - Vue d'ensemble des 9 dimensions principales dont Total Load & Total Reported Load */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+        {/* 1. Intensité Carbone Totale */}
         <div className="bg-white dark:bg-slate-800/90 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Intensité Carbone</span>
@@ -105,10 +109,35 @@ export const CountryDetailView: React.FC<CountryDetailViewProps> = ({
           <div className="mt-2 text-xl font-bold text-slate-900 dark:text-white">
             <UnitFormattedValue value={snapshot.carbonIntensity} unit="gCO2eq/kWh" />
           </div>
-          <span className="text-[10px] text-slate-400 block mt-0.5">Cycle de vie (LCA)</span>
+          <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1">
+            <span>Cycle de vie (LCA)</span>
+            {snapshot.carbonIntensityLevel && (
+              <span className="font-semibold text-slate-600 dark:text-slate-300">
+                Niveau : {snapshot.carbonIntensityLevel}
+              </span>
+            )}
+          </div>
         </div>
 
-        {/* Part Bas-Carbone */}
+        {/* 2. Intensité Carbone Fossile Seule */}
+        <div className="bg-white dark:bg-slate-800/90 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs relative">
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+            <span>Intensité Fossile Seule</span>
+            <Flame className="w-4 h-4 text-amber-600" />
+          </div>
+          <div className="mt-2 text-xl font-bold text-amber-700 dark:text-amber-400">
+            {snapshot.fossilOnlyCarbonIntensity != null ? (
+              <UnitFormattedValue value={snapshot.fossilOnlyCarbonIntensity} unit="gCO2eq/kWh" />
+            ) : (
+              <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+                0 g (Mix 100% décarboné)
+              </span>
+            )}
+          </div>
+          <span className="text-[10px] text-slate-400 block mt-1">Centrales thermiques actives</span>
+        </div>
+
+        {/* 3. Part Bas-Carbone (Carbon-free) */}
         <div className="bg-white dark:bg-slate-800/90 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Part Bas-Carbone</span>
@@ -117,10 +146,17 @@ export const CountryDetailView: React.FC<CountryDetailViewProps> = ({
           <div className="mt-2 text-xl font-bold text-indigo-600 dark:text-indigo-400">
             <UnitFormattedValue value={snapshot.fossilFreePercentage} unit="%" />
           </div>
-          <span className="text-[10px] text-slate-400 block mt-0.5">Renouvelable + Nucléaire</span>
+          <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1">
+            <span>Renouvelable + Nucléaire</span>
+            {snapshot.carbonFreeLevel && (
+              <span className="font-semibold text-indigo-600 dark:text-indigo-300">
+                Niveau : {snapshot.carbonFreeLevel}
+              </span>
+            )}
+          </div>
         </div>
 
-        {/* Part Renouvelable */}
+        {/* 4. Part Renouvelable */}
         <div className="bg-white dark:bg-slate-800/90 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Part Renouvelable</span>
@@ -129,22 +165,69 @@ export const CountryDetailView: React.FC<CountryDetailViewProps> = ({
           <div className="mt-2 text-xl font-bold text-emerald-600 dark:text-emerald-400">
             <UnitFormattedValue value={snapshot.renewablePercentage} unit="%" />
           </div>
-          <span className="text-[10px] text-slate-400 block mt-0.5">Solaire, éolien, hydro...</span>
+          <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1">
+            <span>Solaire, éolien, hydro...</span>
+            {snapshot.renewableLevel && (
+              <span className="font-semibold text-emerald-600 dark:text-emerald-300">
+                Niveau : {snapshot.renewableLevel}
+              </span>
+            )}
+          </div>
         </div>
 
-        {/* Charge Totale (Load) */}
-        <div className="bg-white dark:bg-slate-800/90 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
+        {/* 5. Total Load */}
+        <div className="bg-white dark:bg-slate-800/90 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs relative">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>Charge Totale</span>
+            <span className="flex items-center gap-1.5">
+              <span className="font-semibold text-slate-800 dark:text-slate-200">Total Load</span>
+              <button
+                onClick={() => setShowLoadExplainer(!showLoadExplainer)}
+                className="text-slate-400 hover:text-sky-600 transition cursor-pointer"
+                title="Explication Total Load vs Total Reported Load"
+                aria-label="Explication Total Load"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+              </button>
+            </span>
             <Zap className="w-4 h-4 text-sky-500" />
           </div>
           <div className="mt-2 text-xl font-bold text-sky-600 dark:text-sky-400">
             <UnitFormattedValue value={snapshot.totalConsumption} unit="GW" />
           </div>
-          <span className="text-[10px] text-slate-400 block mt-0.5">Demande réseau appelée</span>
+          <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-1 leading-snug">
+            Total Load : valeur calculée selon la méthodologie Electricity Maps.
+          </span>
         </div>
 
-        {/* Charge Nette (Net Load) */}
+        {/* 6. Total Reported Load */}
+        <div className="bg-white dark:bg-slate-800/90 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs relative">
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+            <span className="flex items-center gap-1.5">
+              <span className="font-semibold text-slate-800 dark:text-slate-200">Total Reported Load</span>
+              <button
+                onClick={() => setShowLoadExplainer(!showLoadExplainer)}
+                className="text-slate-400 hover:text-sky-600 transition cursor-pointer"
+                title="Explication Total Load vs Total Reported Load"
+                aria-label="Explication Total Reported Load"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+              </button>
+            </span>
+            <Radio className="w-4 h-4 text-blue-500" />
+          </div>
+          <div className="mt-2 text-xl font-bold text-slate-800 dark:text-slate-200">
+            {snapshot.reportedLoad ? (
+              <UnitFormattedValue value={snapshot.reportedLoad} unit="GW" />
+            ) : (
+              <span className="text-slate-400 italic text-base">Non rapporté</span>
+            )}
+          </div>
+          <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-1 leading-snug">
+            Total Reported Load : valeur fournie par le gestionnaire de réseau.
+          </span>
+        </div>
+
+        {/* 7. Charge Nette (Net Load) */}
         <div className="bg-white dark:bg-slate-800/90 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs relative">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span className="flex items-center gap-1">
@@ -162,10 +245,26 @@ export const CountryDetailView: React.FC<CountryDetailViewProps> = ({
           <div className="mt-2 text-xl font-bold text-amber-600 dark:text-amber-400">
             <UnitFormattedValue value={snapshot.netLoad} unit="GW" />
           </div>
-          <span className="text-[10px] text-slate-400 block mt-0.5">Charge résiduelle hors ENR</span>
+          <span className="text-[10px] text-slate-400 block mt-1">Charge résiduelle hors ENR</span>
         </div>
 
-        {/* Solde Échanges Net */}
+        {/* 8. Source Dominante (Electricity Source) */}
+        <div className="bg-white dark:bg-slate-800/90 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+            <span>Source Principale</span>
+            <Activity className="w-4 h-4 text-sky-500" />
+          </div>
+          <div className="mt-2 text-lg sm:text-xl font-bold text-slate-900 dark:text-white truncate">
+            {snapshot.dominantSource ? snapshot.dominantSource.labelFr : '—'}
+          </div>
+          <span className="text-[10px] text-slate-400 block mt-1 font-mono">
+            {snapshot.dominantSource?.percentage != null
+              ? `${snapshot.dominantSource.percentage}% de la production`
+              : '—'}
+          </span>
+        </div>
+
+        {/* 9. Solde Échanges Net */}
         <div className="bg-white dark:bg-slate-800/90 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Solde Net</span>
@@ -180,11 +279,57 @@ export const CountryDetailView: React.FC<CountryDetailViewProps> = ({
               <span className="text-slate-400 italic">—</span>
             )}
           </div>
-          <span className="text-[10px] text-slate-400 block mt-0.5">
+          <span className="text-[10px] text-slate-400 block mt-1">
             {snapshot.netExport !== null && snapshot.netExport >= 0 ? 'Exportateur net' : 'Importateur net'}
           </span>
         </div>
       </div>
+
+      {/* Popover pédagogique pour Total Load vs Total Reported Load */}
+      {showLoadExplainer && (
+        <div className="bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800/60 p-4 rounded-xl text-xs text-sky-900 dark:text-sky-200 space-y-2 animate-in fade-in duration-150">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 font-semibold">
+              <Info className="w-4 h-4 text-sky-600 shrink-0" />
+              <span>Pourquoi Total Load et Total Reported Load peuvent différer :</span>
+            </div>
+            <button
+              onClick={() => setShowLoadExplainer(false)}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer text-xs"
+            >
+              ✕ Fermer
+            </button>
+          </div>
+          <p className="leading-relaxed text-slate-700 dark:text-slate-300">
+            Electricity Maps expose deux signaux distincts de charge pour rendre compte fidèlement de la réalité physique et des déclarations administratives :
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div className="bg-white/90 dark:bg-slate-800/90 p-3 rounded-lg border border-sky-200/80 dark:border-sky-800/60">
+              <div className="flex items-center gap-1.5 font-bold text-sky-700 dark:text-sky-400">
+                <Zap className="w-3.5 h-3.5" />
+                <span>Total Load ({snapshot.totalConsumption ? `${(snapshot.totalConsumption / 1000).toFixed(1)} GW` : '—'})</span>
+              </div>
+              <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-300 leading-normal">
+                <strong>Valeur calculée selon la méthodologie Electricity Maps.</strong> Elle applique une définition harmonisée sur toute l'Europe (Production totale + Solde net des flux d'importation/exportation physique), intégrant l'ensemble des pertes de transport et la demande globale.
+              </p>
+            </div>
+            <div className="bg-white/90 dark:bg-slate-800/90 p-3 rounded-lg border border-blue-200/80 dark:border-blue-800/60">
+              <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200">
+                <Radio className="w-3.5 h-3.5 text-blue-500" />
+                <span>Total Reported Load ({snapshot.reportedLoad ? `${(snapshot.reportedLoad / 1000).toFixed(1)} GW` : '—'})</span>
+              </div>
+              <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-300 leading-normal">
+                <strong>Valeur fournie par le gestionnaire de réseau</strong> (RTE en France, ENTSO-E pour les TSO européens). Les gestionnaires de réseau appliquent leurs propres règles de reporting nationales (certains excluent l'autoconsommation industrielle, les stations de pompage STEP ou les pertes réseau).
+              </p>
+            </div>
+          </div>
+          {snapshot.totalConsumption != null && snapshot.reportedLoad != null && (
+            <div className="text-[11px] font-mono text-sky-800 dark:text-sky-300 pt-1">
+              Écart mesuré sur {snapshot.countryNameFr} : {snapshot.totalConsumption - snapshot.reportedLoad > 0 ? '+' : ''}{((snapshot.totalConsumption - snapshot.reportedLoad) / 1000).toFixed(1)} GW ({Math.abs(snapshot.totalConsumption - snapshot.reportedLoad).toLocaleString('fr-FR')} MW)
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Popover pédagogique pour la charge nette */}
       {showNetLoadExplainer && (
@@ -198,6 +343,12 @@ export const CountryDetailView: React.FC<CountryDetailViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Section Données Historiques (24h) - Graphique Recharts */}
+      <CountryHistorySection snapshot={snapshot} />
+
+      {/* Section Complète : Les 13 Signaux Officiels de l'API Electricity Maps V4 */}
+      <ApiV4SignalsSection snapshot={snapshot} />
 
       {/* Section Principale : Mix Électrique et "Pourquoi ce chiffre ?" */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

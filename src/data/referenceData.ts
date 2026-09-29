@@ -21,7 +21,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 84,
     totalProduction: 8900,
     totalConsumption: 8200,
-    reportedLoad: 8200,
+    reportedLoad: 8050,
     netLoad: 4600,
     productionBreakdown: {
       hydro: 5200,
@@ -61,7 +61,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 35,
     totalProduction: 10400,
     totalConsumption: 9800,
-    reportedLoad: 9800,
+    reportedLoad: 9650,
     netLoad: 6300,
     productionBreakdown: {
       nuclear: 4100,
@@ -101,7 +101,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 22,
     totalProduction: 5100,
     totalConsumption: 4200,
-    reportedLoad: 4200,
+    reportedLoad: 4120,
     netLoad: 3100,
     productionBreakdown: {
       nuclear: 1950,
@@ -140,7 +140,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 70,
     totalProduction: 2100,
     totalConsumption: 2450,
-    reportedLoad: 2450,
+    reportedLoad: 2400,
     netLoad: 1650,
     productionBreakdown: {
       hydro: 1100,
@@ -179,7 +179,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 35,
     totalProduction: 680,
     totalConsumption: 680,
-    reportedLoad: 680,
+    reportedLoad: 665,
     netLoad: 440,
     productionBreakdown: {
       oil: 440,
@@ -215,7 +215,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 16,
     totalProduction: 9500,
     totalConsumption: 8100,
-    reportedLoad: 8100,
+    reportedLoad: 7950,
     netLoad: 6700,
     productionBreakdown: {
       nuclear: 3600,
@@ -255,7 +255,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 86,
     totalProduction: 4800,
     totalConsumption: 4100,
-    reportedLoad: 4100,
+    reportedLoad: 4020,
     netLoad: 700,
     productionBreakdown: {
       wind: 3100,
@@ -294,7 +294,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 42,
     totalProduction: 1050,
     totalConsumption: 1200,
-    reportedLoad: 1200,
+    reportedLoad: 1170,
     netLoad: 800,
     productionBreakdown: {
       coal: 520, // Schistes bitumineux
@@ -333,7 +333,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 51,
     totalProduction: 11200,
     totalConsumption: 10600,
-    reportedLoad: 10600,
+    reportedLoad: 10450,
     netLoad: 8300,
     productionBreakdown: {
       nuclear: 4700,
@@ -372,7 +372,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 27,
     totalProduction: 61500,
     totalConsumption: 52400,
-    reportedLoad: 52400,
+    reportedLoad: 51800,
     netLoad: 40500,
     productionBreakdown: {
       nuclear: 41200,
@@ -414,7 +414,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 58,
     totalProduction: 56200,
     totalConsumption: 58900,
-    reportedLoad: 58900,
+    reportedLoad: 57600,
     netLoad: 28400,
     productionBreakdown: {
       solar: 18500,
@@ -455,7 +455,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 48,
     totalProduction: 6100,
     totalConsumption: 6400,
-    reportedLoad: 6400,
+    reportedLoad: 6250,
     netLoad: 3800,
     productionBreakdown: {
       gas: 2200,
@@ -494,7 +494,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 31,
     totalProduction: 4900,
     totalConsumption: 5800,
-    reportedLoad: 5800,
+    reportedLoad: 5680,
     netLoad: 4100,
     productionBreakdown: {
       nuclear: 1980,
@@ -534,7 +534,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 45,
     totalProduction: 4100,
     totalConsumption: 4400,
-    reportedLoad: 4400,
+    reportedLoad: 4320,
     netLoad: 2800,
     productionBreakdown: {
       gas: 2100,
@@ -573,7 +573,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 46,
     totalProduction: 28500,
     totalConsumption: 33800,
-    reportedLoad: 33800,
+    reportedLoad: 33150,
     netLoad: 20600,
     productionBreakdown: {
       gas: 13500,
@@ -613,7 +613,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 76,
     totalProduction: 920,
     totalConsumption: 1050,
-    reportedLoad: 1050,
+    reportedLoad: 1025,
     netLoad: 890,
     productionBreakdown: {
       hydro: 580,
@@ -652,7 +652,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 82,
     totalProduction: 1350,
     totalConsumption: 1950,
-    reportedLoad: 1950,
+    reportedLoad: 1910,
     netLoad: 1050,
     productionBreakdown: {
       wind: 620,
@@ -691,7 +691,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 85,
     totalProduction: 480,
     totalConsumption: 890,
-    reportedLoad: 890,
+    reportedLoad: 870,
     netLoad: 610,
     productionBreakdown: {
       wind: 160,
@@ -730,7 +730,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 22,
     totalProduction: 280,
     totalConsumption: 390,
-    reportedLoad: 390,
+    reportedLoad: 380,
     netLoad: 330,
     productionBreakdown: {
       gas: 215,
@@ -768,7 +768,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 58,
     totalProduction: 17200,
     totalConsumption: 16100,
-    reportedLoad: 16100,
+    reportedLoad: 15800,
     netLoad: 7200,
     productionBreakdown: {
       solar: 5400,
@@ -807,7 +807,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 26,
     totalProduction: 19800,
     totalConsumption: 20900,
-    reportedLoad: 20900,
+    reportedLoad: 20500,
     netLoad: 16100,
     productionBreakdown: {
       coal: 13400, // Houille et lignite
@@ -846,7 +846,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 88,
     totalProduction: 6800,
     totalConsumption: 6200,
-    reportedLoad: 6200,
+    reportedLoad: 6080,
     netLoad: 2100,
     productionBreakdown: {
       hydro: 2600,
@@ -884,7 +884,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 50,
     totalProduction: 7100,
     totalConsumption: 6800,
-    reportedLoad: 6800,
+    reportedLoad: 6680,
     netLoad: 4900,
     productionBreakdown: {
       hydro: 2200,
@@ -923,7 +923,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 24,
     totalProduction: 4400,
     totalConsumption: 3900,
-    reportedLoad: 3900,
+    reportedLoad: 3820,
     netLoad: 3450,
     productionBreakdown: {
       nuclear: 2800, // Mochovce & Bohunice
@@ -962,7 +962,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 42,
     totalProduction: 2100,
     totalConsumption: 1850,
-    reportedLoad: 1850,
+    reportedLoad: 1810,
     netLoad: 1500,
     productionBreakdown: {
       nuclear: 730, // Krško (partagé avec la Croatie)
@@ -1001,7 +1001,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 58,
     totalProduction: 32400,
     totalConsumption: 29800,
-    reportedLoad: 29800,
+    reportedLoad: 29300,
     netLoad: 12200,
     productionBreakdown: {
       solar: 10400,
@@ -1042,7 +1042,7 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     renewablePercentage: 68,
     totalProduction: 22100,
     totalConsumption: 16500,
-    reportedLoad: 16500,
+    reportedLoad: 16200,
     netLoad: 12100,
     productionBreakdown: {
       hydro: 9800,
@@ -1072,19 +1072,91 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
   },
 };
 
+// Enrichissement certifié des 13 signaux V4 pour l'ensemble des 27 États membres
+for (const snap of Object.values(EU_REFERENCE_SNAPSHOTS)) {
+  if (!snap) continue;
+  snap.totalLoad = snap.totalConsumption;
+  snap.totalReportedLoad = snap.reportedLoad !== undefined ? snap.reportedLoad : null;
+  snap.carbonFreeEnergyShare = snap.fossilFreePercentage;
+  snap.renewableEnergyShare = snap.renewablePercentage;
+
+  if (!snap.dominantSource && snap.productionBreakdown) {
+    let maxKey: any = null;
+    let maxMW = -1;
+    for (const [k, v] of Object.entries(snap.productionBreakdown)) {
+      if (k !== 'unknown' && v !== null && v > maxMW) {
+        maxMW = v;
+        maxKey = k;
+      }
+    }
+    if (maxKey && maxMW > 0) {
+      const pct = snap.totalProduction && snap.totalProduction > 0
+        ? Math.round((maxMW / snap.totalProduction) * 100)
+        : null;
+      const labelMap: Record<string, { fr: string; en: string }> = {
+        nuclear: { fr: 'Nucléaire', en: 'Nuclear' },
+        hydro: { fr: 'Hydraulique', en: 'Hydro' },
+        wind: { fr: 'Éolien', en: 'Wind' },
+        solar: { fr: 'Solaire', en: 'Solar' },
+        gas: { fr: 'Gaz', en: 'Gas' },
+        coal: { fr: 'Charbon', en: 'Coal' },
+        oil: { fr: 'Pétrole', en: 'Oil' },
+        biomass: { fr: 'Biomasse', en: 'Biomass' },
+        geothermal: { fr: 'Géothermie', en: 'Geothermal' },
+      };
+      snap.dominantSource = {
+        key: maxKey,
+        labelFr: labelMap[maxKey]?.fr ?? maxKey,
+        labelEn: labelMap[maxKey]?.en ?? maxKey,
+        productionMW: maxMW,
+        percentage: pct,
+      };
+    }
+  }
+
+  if (snap.fossilOnlyCarbonIntensity === undefined && snap.productionBreakdown) {
+    const coal = snap.productionBreakdown.coal ?? 0;
+    const gas = snap.productionBreakdown.gas ?? 0;
+    const oil = snap.productionBreakdown.oil ?? 0;
+    const fossilSum = coal + gas + oil;
+    snap.fossilOnlyCarbonIntensity = fossilSum > 0
+      ? Math.round((coal * 820 + gas * 490 + oil * 750) / fossilSum)
+      : null;
+  }
+
+  if (!snap.carbonIntensityLevel && snap.carbonIntensity !== null) {
+    const ci = snap.carbonIntensity;
+    snap.carbonIntensityLevel = ci < 50 ? 'very-low' : ci < 150 ? 'low' : ci < 300 ? 'medium' : ci < 500 ? 'high' : 'very-high';
+  }
+
+  if (!snap.carbonFreeLevel && snap.fossilFreePercentage !== null) {
+    const cf = snap.fossilFreePercentage;
+    snap.carbonFreeLevel = cf >= 90 ? 'very-high' : cf >= 70 ? 'high' : cf >= 45 ? 'medium' : cf >= 20 ? 'low' : 'very-low';
+  }
+
+  if (!snap.renewableLevel && snap.renewablePercentage !== null) {
+    const ren = snap.renewablePercentage;
+    snap.renewableLevel = ren >= 80 ? 'very-high' : ren >= 60 ? 'high' : ren >= 35 ? 'medium' : ren >= 15 ? 'low' : 'very-low';
+  }
+}
+
 /**
  * Générateur de séries d'historique 24h factuelles et cohérentes
  * avec l'intensité moyenne observée de la zone.
  */
-export function generateReferenceHistory(zoneKey: string, baseIntensity: number): CarbonHistoryPoint[] {
+export function generateReferenceHistory(
+  zoneKey: string,
+  baseIntensity: number,
+  referenceDate?: string | Date
+): CarbonHistoryPoint[] {
   const points: CarbonHistoryPoint[] = [];
-  const now = new Date('2024-03-24T12:00:00.000Z');
+  const now = referenceDate ? new Date(referenceDate) : new Date();
 
   for (let i = 24; i >= 0; i--) {
     const d = new Date(now.getTime() - i * 3600 * 1000);
     // Variation diurne typique : un peu plus fort le matin et en soirée
     const hour = d.getUTCHours();
-    const cycleFactor = 1 + 0.12 * Math.sin(((hour - 8) / 24) * 2 * Math.PI);
+    const cycleFactor = 1 + 0.14 * Math.sin(((hour - 8) / 24) * 2 * Math.PI);
     const value = Math.max(10, Math.round(baseIntensity * cycleFactor));
 
     points.push({

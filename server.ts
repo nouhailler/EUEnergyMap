@@ -117,13 +117,14 @@ app.get('/api/electricity-maps/eu-summary', async (_req: Request, res: Response)
 
       if (!zoneSnapshot) {
         // Appels aux endpoints officiels V4/V3
-        const [carbonData, breakdownData] = await Promise.all([
+        const [carbonData, breakdownData, reportedLoadData] = await Promise.all([
           fetchElectricityMaps<any>(`${V4_BASE}/carbon-intensity/latest?zone=${encodeURIComponent(zoneKey)}`),
           fetchElectricityMaps<any>(`${V3_BASE}/power-breakdown/latest?zone=${encodeURIComponent(zoneKey)}`),
+          fetchElectricityMaps<any>(`${V4_BASE}/total-reported-load/latest?zone=${encodeURIComponent(zoneKey)}`),
         ]);
 
-        if (carbonData || breakdownData) {
-          zoneSnapshot = normalizeCountrySnapshot(country.code, breakdownData, carbonData);
+        if (carbonData || breakdownData || reportedLoadData) {
+          zoneSnapshot = normalizeCountrySnapshot(country.code, breakdownData, carbonData, reportedLoadData);
           setCached(zoneCacheKey, zoneSnapshot, CACHE_TTL_MS);
           liveCount++;
         } else {
@@ -181,17 +182,18 @@ app.get('/api/electricity-maps/snapshot', async (req: Request, res: Response) =>
   }
 
   try {
-    const [carbonData, breakdownData] = await Promise.all([
+    const [carbonData, breakdownData, reportedLoadData] = await Promise.all([
       fetchElectricityMaps<any>(`${V4_BASE}/carbon-intensity/latest?zone=${encodeURIComponent(country.zoneKey)}`),
       fetchElectricityMaps<any>(`${V3_BASE}/power-breakdown/latest?zone=${encodeURIComponent(country.zoneKey)}`),
+      fetchElectricityMaps<any>(`${V4_BASE}/total-reported-load/latest?zone=${encodeURIComponent(country.zoneKey)}`),
     ]);
 
-    if (!carbonData && !breakdownData) {
+    if (!carbonData && !breakdownData && !reportedLoadData) {
       const fallback = EU_REFERENCE_SNAPSHOTS[country.code];
       return res.json(fallback);
     }
 
-    const snapshot = normalizeCountrySnapshot(country.code, breakdownData, carbonData);
+    const snapshot = normalizeCountrySnapshot(country.code, breakdownData, carbonData, reportedLoadData);
     setCached(cacheKey, snapshot, CACHE_TTL_MS);
     return res.json(snapshot);
   } catch (err) {

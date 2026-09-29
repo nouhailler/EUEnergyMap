@@ -28,6 +28,16 @@ export interface ProductionSourceMeta {
   descriptionFr: string;
 }
 
+export type SignalLevel = 'very-low' | 'low' | 'medium' | 'high' | 'very-high';
+
+export interface DominantSourceInfo {
+  key: ProductionSourceKey;
+  labelFr: string;
+  labelEn: string;
+  productionMW: number | null;
+  percentage: number | null; // % de la production totale
+}
+
 export interface CrossBorderFlow {
   fromZone: string;
   toZone: string;
@@ -37,6 +47,9 @@ export interface CrossBorderFlow {
 
 export type DataQualityStatus = 'measured' | 'estimated' | 'unavailable' | 'stale';
 
+/**
+ * Instantané énergétique conforme aux 13 signaux exposés par l'API Electricity Maps (V4)
+ */
 export interface CountryElectricitySnapshot {
   countryCode: string;           // Code ISO alpha-2 (ex: "FR", "DE")
   countryNameFr: string;         // Nom officiel français (ex: "France")
@@ -48,36 +61,73 @@ export interface CountryElectricitySnapshot {
   datetime: string;              // Horodatage ISO de la mesure
   updatedAt: string;             // Horodatage ISO de mise à jour chez Electricity Maps
 
-  // Métriques carbone
-  carbonIntensity: number | null; // gCO₂eq/kWh
-  carbonIntensityLevel?: 'low' | 'medium' | 'high' | 'very-high' | null;
+  // --- Les 13 signaux officiels de l'API Electricity Maps V4 ---
 
-  // Parts d'énergies (%)
-  fossilFreePercentage: number | null; // % bas-carbone (renouvelable + nucléaire)
-  renewablePercentage: number | null;  // % renouvelable strict
-
-  // Puissances et charges (MW)
-  totalProduction: number | null;      // Total produit (MW)
-  totalConsumption: number | null;     // Charge totale / Total Load (MW)
-  reportedLoad: number | null;         // Charge rapportée officiellement (MW)
-  netLoad: number | null;              // Charge nette résiduelle (Load - Solaire - Éolien)
-
-  // Mix de production détaillé (MW par source)
+  // 1. Electricity mix : Mix de production et consommation par filière
   productionBreakdown: Record<ProductionSourceKey, number | null>;
-
-  // Mix de consommation (flow-traced si disponible)
   consumptionBreakdown?: Record<ProductionSourceKey, number | null>;
 
-  // Échanges transfrontaliers (MW)
+  // 2. Electricity flows : Flux transfrontaliers physiques & imports / exports
+  exchangeFlows: CrossBorderFlow[];    // Détail des flux vers/depuis les voisins
   importTotal: number | null;          // Somme des imports (MW)
   exportTotal: number | null;          // Somme des exports (MW)
   netExport: number | null;            // Solde net = exportTotal - importTotal (+: exportateur net, -: importateur)
-  exchangeFlows: CrossBorderFlow[];    // Détail des flux vers/depuis les voisins
 
-  // Qualité et traçabilité
+  // 3. Electricity source : Source primaire dominante
+  dominantSource?: DominantSourceInfo | null;
+
+  // 4. Total load : Charge totale / consommation électrique globale (MW)
+  totalConsumption: number | null;     // Charge totale (MW)
+  totalLoad?: number | null;           // Alias normalisé V4 (MW)
+
+  // 5. Total reported load : Charge totale rapportée officiellement par les TSO (MW)
+  reportedLoad: number | null;         // Charge rapportée officiellement (MW)
+  totalReportedLoad?: number | null;   // Alias normalisé V4 (MW)
+
+  // 6. Net load : Charge nette résiduelle (Total Load - Solaire - Éolien) (MW)
+  netLoad: number | null;              // Charge nette résiduelle (MW)
+
+  // 7. Carbon intensity : Intensité carbone globale (gCO₂eq/kWh)
+  carbonIntensity: number | null;      // gCO₂eq/kWh
+
+  // 8. Carbon-free energy share : Part d'énergie décarbonée (renouvelable + nucléaire) (%)
+  fossilFreePercentage: number | null; // % bas-carbone
+  carbonFreeEnergyShare?: number | null; // Alias normalisé V4 (%)
+
+  // 9. Renewable energy share : Part d'énergie renouvelable stricte (%)
+  renewablePercentage: number | null;  // % renouvelable strict
+  renewableEnergyShare?: number | null; // Alias normalisé V4 (%)
+
+  // 10. Fossil-only carbon intensity : Intensité carbone des seules sources fossiles (gCO₂eq/kWh)
+  fossilOnlyCarbonIntensity?: number | null; // gCO₂eq/kWh des filières fossiles
+
+  // 11. Carbon-free level : Niveau qualitatif officiel de décarbonation
+  carbonFreeLevel?: SignalLevel | null;
+
+  // 12. Carbon intensity level : Niveau qualitatif officiel d'intensité carbone
+  carbonIntensityLevel?: SignalLevel | null;
+
+  // 13. Renewable level : Niveau qualitatif officiel de renouvelables
+  renewableLevel?: SignalLevel | null;
+
+  // Autres indicateurs de production et qualité
+  totalProduction: number | null;      // Total produit (MW)
   isEstimated: boolean;
   estimationMethod: string | null;
   dataSourceQuality: DataQualityStatus;
+}
+
+export interface ApiV4SignalItem {
+  key: string;
+  nameEn: string;
+  nameFr: string;
+  category: 'mix_flows' | 'load' | 'carbon' | 'levels';
+  value: string | number | null;
+  unit: string;
+  formattedValue: string;
+  level?: SignalLevel | null;
+  descriptionFr: string;
+  apiEndpointV4: string;
 }
 
 export interface CarbonHistoryPoint {
@@ -96,4 +146,6 @@ export type IndicatorMode =
   | 'renewableShare'
   | 'carbonFreeShare'
   | 'totalLoad'
+  | 'netLoad'
+  | 'fossilOnlyCarbonIntensity'
   | 'primarySource';

@@ -6,7 +6,18 @@ import App from '../App';
 import { EUSummaryCards } from '../components/europe/EUSummaryCards';
 import { EUTable } from '../components/europe/EUTable';
 import { EUEnergyMap } from '../components/europe/EUEnergyMap';
+import { CountryDetailView } from '../components/countries/CountryDetailView';
+import { CountryHistorySection } from '../components/countries/CountryHistorySection';
 import { EU_REFERENCE_SNAPSHOTS } from '../data/referenceData';
+
+// Polyfill ResizeObserver for Recharts ResponsiveContainer in jsdom
+if (typeof window !== 'undefined' && !window.ResizeObserver) {
+  window.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
 
 describe('Components Render Test', () => {
   it('renders EUSummaryCards with reference snapshots', () => {
@@ -51,5 +62,25 @@ describe('Components Render Test', () => {
     const div = document.createElement('div');
     const root = createRoot(div);
     root.render(<App />);
+  });
+
+  it('renders CountryHistorySection with reference snapshot', () => {
+    const div = document.createElement('div');
+    const root = createRoot(div);
+    root.render(
+      <CountryHistorySection snapshot={EU_REFERENCE_SNAPSHOTS['FR']} />
+    );
+  });
+
+  it('renders CountryDetailView with reference snapshot', () => {
+    const div = document.createElement('div');
+    const root = createRoot(div);
+    root.render(
+      <CountryDetailView
+        snapshot={EU_REFERENCE_SNAPSHOTS['FR']}
+        onBack={() => {}}
+        onSelectCountry={() => {}}
+      />
+    );
   });
 });

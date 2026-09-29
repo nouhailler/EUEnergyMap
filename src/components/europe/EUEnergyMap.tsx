@@ -130,6 +130,25 @@ export const EUEnergyMap: React.FC<EUEnergyMapProps> = ({
         return '#bae6fd';
       }
 
+      if (selectedIndicator === 'netLoad') {
+        const net = s.netLoad;
+        if (net == null) return '#94a3b8';
+        if (net >= 35000) return '#b45309';
+        if (net >= 20000) return '#d97706';
+        if (net >= 8000) return '#f59e0b';
+        if (net >= 2500) return '#fbbf24';
+        return '#fef3c7';
+      }
+
+      if (selectedIndicator === 'fossilOnlyCarbonIntensity') {
+        const fci = s.fossilOnlyCarbonIntensity;
+        if (fci == null) return '#10b981';
+        if (fci >= 800) return '#991b1b';
+        if (fci >= 650) return '#ef4444';
+        if (fci >= 500) return '#f97316';
+        return '#fbbf24';
+      }
+
       if (selectedIndicator === 'primarySource') {
         return getPrimarySource(s).color;
       }
@@ -147,6 +166,9 @@ export const EUEnergyMap: React.FC<EUEnergyMapProps> = ({
       if (selectedIndicator === 'carbonIntensity') {
         return s.carbonIntensity != null ? `${s.carbonIntensity}g` : '—';
       }
+      if (selectedIndicator === 'fossilOnlyCarbonIntensity') {
+        return s.fossilOnlyCarbonIntensity != null ? `${s.fossilOnlyCarbonIntensity}g` : '0g';
+      }
       if (selectedIndicator === 'renewableShare') {
         return s.renewablePercentage != null ? `${Math.round(s.renewablePercentage)}%` : '—';
       }
@@ -155,6 +177,9 @@ export const EUEnergyMap: React.FC<EUEnergyMapProps> = ({
       }
       if (selectedIndicator === 'totalLoad') {
         return s.totalConsumption != null ? `${(s.totalConsumption / 1000).toFixed(1)}GW` : '—';
+      }
+      if (selectedIndicator === 'netLoad') {
+        return s.netLoad != null ? `${(s.netLoad / 1000).toFixed(1)}GW` : '—';
       }
       if (selectedIndicator === 'primarySource') {
         return (getPrimarySource(s)?.label || '—').slice(0, 4);
@@ -579,9 +604,11 @@ export const EUEnergyMap: React.FC<EUEnergyMapProps> = ({
               className="text-xs font-semibold bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-sky-500 cursor-pointer shadow-2xs"
             >
               <option value="carbonIntensity">Intensité carbone (gCO₂eq/kWh)</option>
+              <option value="fossilOnlyCarbonIntensity">Intensité fossile seule (gCO₂eq/kWh)</option>
               <option value="renewableShare">Part renouvelable (%)</option>
               <option value="carbonFreeShare">Part sans fossile (%)</option>
               <option value="totalLoad">Consommation électrique (GW)</option>
+              <option value="netLoad">Charge nette résiduelle (GW)</option>
               <option value="primarySource">Source principale de production</option>
             </select>
           </div>

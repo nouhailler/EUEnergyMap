@@ -36,12 +36,32 @@ export const CompareView: React.FC<CompareViewProps> = ({ snapshots, onSelectCou
   }[] = [
     {
       label: 'Intensité Carbone',
-      description: 'Émissions totales en cycle de vie',
+      description: 'Émissions totales en cycle de vie (LCA)',
       render: (s) => (
         <UnitFormattedValue
           value={s?.carbonIntensity}
           unit="gCO2eq/kWh"
           className="font-bold text-slate-900 dark:text-white"
+        />
+      ),
+    },
+    {
+      label: 'Palier Intensité Carbone',
+      description: 'Niveau qualitatif officiel Electricity Maps',
+      render: (s) => (
+        <span className="font-semibold text-slate-700 dark:text-slate-300">
+          {s?.carbonIntensityLevel ?? '—'}
+        </span>
+      ),
+    },
+    {
+      label: 'Intensité Fossile Seule',
+      description: 'Émissions des seules centrales thermiques (charbon/gaz/fioul)',
+      render: (s) => (
+        <UnitFormattedValue
+          value={s?.fossilOnlyCarbonIntensity}
+          unit="gCO2eq/kWh"
+          className="font-semibold text-amber-600 dark:text-amber-400"
         />
       ),
     },
@@ -57,8 +77,17 @@ export const CompareView: React.FC<CompareViewProps> = ({ snapshots, onSelectCou
       ),
     },
     {
+      label: 'Palier Renouvelable',
+      description: 'Classification qualitative des énergies renouvelables',
+      render: (s) => (
+        <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+          {s?.renewableLevel ?? '—'}
+        </span>
+      ),
+    },
+    {
       label: 'Part Bas-Carbone',
-      description: 'Sans fossile (Renouvelable + Fissile)',
+      description: 'Sans fossile (Renouvelable + Nucléaire)',
       render: (s) => (
         <UnitFormattedValue
           value={s?.fossilFreePercentage}
@@ -68,10 +97,26 @@ export const CompareView: React.FC<CompareViewProps> = ({ snapshots, onSelectCou
       ),
     },
     {
-      label: 'Charge Consommée (Total Load)',
-      description: 'Puissance totale appelée par le réseau national',
+      label: 'Palier Bas-Carbone',
+      description: 'Niveau de décarbonation global',
       render: (s) => (
-        <UnitFormattedValue value={s?.totalConsumption} unit="GW" className="font-medium" />
+        <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+          {s?.carbonFreeLevel ?? '—'}
+        </span>
+      ),
+    },
+    {
+      label: 'Total Load',
+      description: 'Total Load : valeur calculée selon la méthodologie Electricity Maps.',
+      render: (s) => (
+        <UnitFormattedValue value={s?.totalConsumption} unit="GW" className="font-semibold text-sky-600 dark:text-sky-400" />
+      ),
+    },
+    {
+      label: 'Total Reported Load',
+      description: 'Total Reported Load : valeur fournie par le gestionnaire de réseau.',
+      render: (s) => (
+        <UnitFormattedValue value={s?.reportedLoad} unit="GW" className="font-medium text-slate-700 dark:text-slate-300" />
       ),
     },
     {
@@ -79,6 +124,15 @@ export const CompareView: React.FC<CompareViewProps> = ({ snapshots, onSelectCou
       description: 'Charge totale résiduelle après soustraction de l’éolien et du solaire',
       render: (s) => (
         <UnitFormattedValue value={s?.netLoad} unit="GW" className="font-medium text-amber-600 dark:text-amber-400" />
+      ),
+    },
+    {
+      label: 'Source Principale',
+      description: 'Filière électrique dominante sur le réseau',
+      render: (s) => (
+        <span className="font-semibold text-slate-800 dark:text-slate-200">
+          {s?.dominantSource ? `${s.dominantSource.labelFr} (${s.dominantSource.percentage}%)` : '—'}
+        </span>
       ),
     },
     {
