@@ -15,6 +15,31 @@ export interface RawElectricityMapsBreakdown {
   zone?: string;
   datetime?: string;
   updatedAt?: string;
+  // --- Format officiel V4 : /v4/electricity-mix/latest ---
+  mix?: {
+    normal?: Partial<Record<ProductionSourceKey, number | null>>;
+    production?: Partial<Record<ProductionSourceKey, number | null>>;
+    'flow-traced'?: Partial<Record<ProductionSourceKey, number | null>>;
+    flowTraced?: Partial<Record<ProductionSourceKey, number | null>>;
+    consumption?: Partial<Record<ProductionSourceKey, number | null>>;
+    storage?: Record<string, number | null>;
+    stockage?: Record<string, number | null>;
+    imports?: Record<string, number | null>;
+    exports?: Record<string, number | null>;
+    productionTotal?: number | null;
+    consumptionTotal?: number | null;
+    importTotal?: number | null;
+    exportTotal?: number | null;
+  } | Partial<Record<ProductionSourceKey, number | null>>;
+  normal?: Partial<Record<ProductionSourceKey, number | null>>;
+  production?: Partial<Record<ProductionSourceKey, number | null>>;
+  'flow-traced'?: Partial<Record<ProductionSourceKey, number | null>>;
+  flowTraced?: Partial<Record<ProductionSourceKey, number | null>>;
+  storage?: Record<string, number | null>;
+  stockage?: Record<string, number | null>;
+  imports?: Record<string, number | null>;
+  exports?: Record<string, number | null>;
+  // --- Format standard / V3 : /v3/power-breakdown/latest ---
   powerProductionBreakdown?: Partial<Record<ProductionSourceKey, number | null>>;
   powerProductionTotal?: number | null;
   powerConsumptionBreakdown?: Partial<Record<ProductionSourceKey, number | null>>;
@@ -45,15 +70,10 @@ export interface RawElectricityMapsCarbon {
 }
 
 /**
- * Calcule le niveau qualitatif d'intensité carbone selon les seuils standards V4
+ * @deprecated Ne pas inventer de seuils locaux. Electricity Maps fournit /v4/carbon-intensity-level/latest relatif au comportement récent de la zone.
  */
-export function computeCarbonIntensityLevel(ci: number | null): SignalLevel | null {
-  if (ci === null || ci === undefined) return null;
-  if (ci < 50) return 'very-low';
-  if (ci < 150) return 'low';
-  if (ci < 300) return 'medium';
-  if (ci < 500) return 'high';
-  return 'very-high';
+export function computeCarbonIntensityLevel(_ci: number | null): SignalLevel | null {
+  return null;
 }
 
 /**
@@ -69,15 +89,10 @@ export function computeCarbonFreeLevel(cf: number | null): SignalLevel | null {
 }
 
 /**
- * Calcule le niveau qualitatif de part renouvelable
+ * @deprecated Ne pas inventer de seuils locaux. Electricity Maps fournit /v4/renewable-percentage-level/latest relatif à la zone.
  */
-export function computeRenewableLevel(ren: number | null): SignalLevel | null {
-  if (ren === null || ren === undefined) return null;
-  if (ren >= 80) return 'very-high';
-  if (ren >= 60) return 'high';
-  if (ren >= 35) return 'medium';
-  if (ren >= 15) return 'low';
-  return 'very-low';
+export function computeRenewableLevel(_ren: number | null): SignalLevel | null {
+  return null;
 }
 
 /**
@@ -164,7 +179,7 @@ export function extract13Signals(snapshot: CountryElectricitySnapshot): ApiV4Sig
       unit: 'MW',
       formattedValue: snapshot.totalProduction != null ? `${snapshot.totalProduction.toLocaleString('fr-FR')} MW` : '—',
       descriptionFr: 'Ventilation détaillée de la production et de la consommation par filière énergétique.',
-      apiEndpointV4: '/v4/power-breakdown/latest',
+      apiEndpointV4: '/v4/electricity-mix/latest',
     },
     // 2. Electricity flows
     {
@@ -176,7 +191,7 @@ export function extract13Signals(snapshot: CountryElectricitySnapshot): ApiV4Sig
       unit: 'MW',
       formattedValue: snapshot.netExport != null ? `${snapshot.netExport >= 0 ? '+' : ''}${snapshot.netExport.toLocaleString('fr-FR')} MW` : '—',
       descriptionFr: 'Solde net et interconnexions physiques transfrontalières avec les pays voisins.',
-      apiEndpointV4: '/v4/power-breakdown/latest',
+      apiEndpointV4: '/v4/electricity-flows/latest',
     },
     // 3. Electricity source
     {
@@ -188,7 +203,7 @@ export function extract13Signals(snapshot: CountryElectricitySnapshot): ApiV4Sig
       unit: '%',
       formattedValue: dom ? `${dom.labelFr} (${dom.percentage}%)` : '—',
       descriptionFr: 'Filière de production majoritaire sur le réseau national.',
-      apiEndpointV4: '/v4/power-breakdown/latest',
+      apiEndpointV4: '/v4/electricity-mix/latest',
     },
     // 4. Total load
     {
@@ -218,12 +233,12 @@ export function extract13Signals(snapshot: CountryElectricitySnapshot): ApiV4Sig
     {
       key: 'net_load',
       nameEn: 'Net load',
-      nameFr: 'Charge nette résiduelle',
+      nameFr: 'Charge nette résiduelle (Net load)',
       category: 'load',
       value: net,
       unit: 'MW',
-      formattedValue: net != null ? `${net.toLocaleString('fr-FR')} MW` : '—',
-      descriptionFr: 'Charge totale résiduelle après déduction des énergies renouvelables intermittentes (solaire + éolien).',
+      formattedValue: net != null ? `${(net / 1000).toFixed(1)} GW (${net.toLocaleString('fr-FR')} MW)` : '—',
+      descriptionFr: 'Net Load : signal officiel issu de /v4/net-load/latest (charge résiduelle calculée par Electricity Maps prenant en compte production, renouvelables, stockage et flux).',
       apiEndpointV4: '/v4/net-load/latest',
     },
     // 7. Carbon intensity
@@ -277,43 +292,101 @@ export function extract13Signals(snapshot: CountryElectricitySnapshot): ApiV4Sig
     // 11. Carbon-free level
     {
       key: 'carbon_free_level',
-      nameEn: 'Carbon-free level',
-      nameFr: 'Niveau qualitatif décarboné',
+      nameEn: 'Carbon-free percentage level',
+      nameFr: 'Carbon-Free Level (Niveau bas-carbone)',
       category: 'levels',
       value: snapshot.carbonFreeLevel ?? null,
-      unit: 'palier',
-      formattedValue: snapshot.carbonFreeLevel ? formatLevelFr(snapshot.carbonFreeLevel) : '—',
+      unit: 'niveau',
+      formattedValue: snapshot.carbonFreeLevel ? `${formatCarbonFreeLevelBadge(snapshot.carbonFreeLevel).dot} ${formatCarbonFreeLevelBadge(snapshot.carbonFreeLevel).text}` : '—',
       level: snapshot.carbonFreeLevel,
-      descriptionFr: 'Palier qualitatif normalisé Electricity Maps évaluant le taux de décarbonation.',
-      apiEndpointV4: '/v4/carbon-free-level/latest',
+      descriptionFr: 'Carbon-Free Level : niveau officiel Electricity Maps comparant la part décarbonée à la moyenne récente de la zone (🟢 HIGH, 🟡 MODERATE, 🔴 LOW).',
+      apiEndpointV4: '/v4/carbon-free-percentage-level/latest',
     },
     // 12. Carbon intensity level
     {
       key: 'carbon_intensity_level',
       nameEn: 'Carbon intensity level',
-      nameFr: 'Niveau d’intensité carbone',
+      nameFr: 'Niveau d’intensité carbone (Carbon intensity level)',
       category: 'levels',
       value: snapshot.carbonIntensityLevel ?? null,
-      unit: 'palier',
-      formattedValue: snapshot.carbonIntensityLevel ? formatLevelFr(snapshot.carbonIntensityLevel) : '—',
+      unit: 'niveau',
+      formattedValue: snapshot.carbonIntensityLevel ? `${formatCarbonIntensityLevelBadge(snapshot.carbonIntensityLevel).dot} ${formatCarbonIntensityLevelBadge(snapshot.carbonIntensityLevel).text}` : '—',
       level: snapshot.carbonIntensityLevel,
-      descriptionFr: 'Classification de l’impact environnemental de très faible à très élevé.',
+      descriptionFr: 'Carbon intensity level : niveau officiel Electricity Maps calculé relativement au comportement récent de la zone (/v4/carbon-intensity-level/latest), et non selon des seuils universels fixes.',
       apiEndpointV4: '/v4/carbon-intensity-level/latest',
     },
     // 13. Renewable level
     {
       key: 'renewable_level',
-      nameEn: 'Renewable level',
-      nameFr: 'Niveau qualitatif renouvelable',
+      nameEn: 'Renewable percentage level',
+      nameFr: 'Renewable Level (Niveau de renouvelables)',
       category: 'levels',
       value: snapshot.renewableLevel ?? null,
-      unit: 'palier',
-      formattedValue: snapshot.renewableLevel ? formatLevelFr(snapshot.renewableLevel) : '—',
+      unit: 'niveau',
+      formattedValue: snapshot.renewableLevel ? `${formatRenewableLevelBadge(snapshot.renewableLevel).dot} ${formatRenewableLevelBadge(snapshot.renewableLevel).text}` : '—',
       level: snapshot.renewableLevel,
-      descriptionFr: 'Palier qualitatif normalisé évaluant la pénétration des énergies renouvelables.',
-      apiEndpointV4: '/v4/renewable-level/latest',
+      descriptionFr: 'Renewable level : niveau officiel Electricity Maps calculé en comparant la part renouvelable à la moyenne récente de la zone (/v4/renewable-percentage-level/latest), et non selon un seuil absolu.',
+      apiEndpointV4: '/v4/renewable-percentage-level/latest',
     },
   ];
+}
+
+export function formatRenewableLevelBadge(level?: SignalLevel | null): { text: string; color: string; bg: string; dot: string } {
+  switch (level) {
+    case 'very-high':
+    case 'high':
+      return { text: 'HIGH', color: 'text-emerald-700 dark:text-emerald-300', bg: 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800', dot: '🟢' };
+    case 'medium':
+      return { text: 'MODERATE', color: 'text-amber-700 dark:text-amber-300', bg: 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800', dot: '🟡' };
+    case 'low':
+    case 'very-low':
+      return { text: 'LOW', color: 'text-rose-700 dark:text-rose-300', bg: 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800', dot: '🔴' };
+    default:
+      return { text: 'INDÉTERMINÉ', color: 'text-slate-600 dark:text-slate-300', bg: 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700', dot: '⚪' };
+  }
+}
+
+export function formatCarbonFreeLevelBadge(level?: SignalLevel | null): { text: string; color: string; bg: string; dot: string } {
+  switch (level) {
+    case 'very-high':
+    case 'high':
+      return { text: 'HIGH', color: 'text-emerald-700 dark:text-emerald-300', bg: 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800', dot: '🟢' };
+    case 'medium':
+      return { text: 'MODERATE', color: 'text-amber-700 dark:text-amber-300', bg: 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800', dot: '🟡' };
+    case 'low':
+    case 'very-low':
+      return { text: 'LOW', color: 'text-rose-700 dark:text-rose-300', bg: 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800', dot: '🔴' };
+    default:
+      return { text: 'INDÉTERMINÉ', color: 'text-slate-600 dark:text-slate-300', bg: 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700', dot: '⚪' };
+  }
+}
+
+export function formatCarbonIntensityLevelBadge(level?: SignalLevel | null): { text: string; color: string; bg: string; dot: string } {
+  switch (level) {
+    case 'very-low':
+      return { text: 'VERY LOW', color: 'text-emerald-700 dark:text-emerald-300', bg: 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800', dot: '🟢' };
+    case 'low':
+      return { text: 'LOW', color: 'text-emerald-700 dark:text-emerald-300', bg: 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800', dot: '🟢' };
+    case 'medium':
+      return { text: 'MODERATE', color: 'text-amber-700 dark:text-amber-300', bg: 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800', dot: '🟡' };
+    case 'high':
+      return { text: 'HIGH', color: 'text-orange-700 dark:text-orange-300', bg: 'bg-orange-50 dark:bg-orange-950/60 border-orange-300 dark:border-orange-800', dot: '🟠' };
+    case 'very-high':
+      return { text: 'VERY HIGH', color: 'text-rose-700 dark:text-rose-300', bg: 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800', dot: '🔴' };
+    default:
+      return { text: 'INDÉTERMINÉ', color: 'text-slate-600 dark:text-slate-300', bg: 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700', dot: '⚪' };
+  }
+}
+
+export function parseSignalLevel(raw?: string | null): SignalLevel | null {
+  if (!raw) return null;
+  const s = String(raw).toLowerCase().replace(/_/g, '-').trim();
+  if (s === 'very-high' || s === 'veryhigh') return 'very-high';
+  if (s === 'high') return 'high';
+  if (s === 'moderate' || s === 'medium' || s === 'mid') return 'medium';
+  if (s === 'low') return 'low';
+  if (s === 'very-low' || s === 'verylow') return 'very-low';
+  return null;
 }
 
 function formatLevelFr(level: SignalLevel): string {
@@ -341,7 +414,12 @@ export function normalizeCountrySnapshot(
   countryCode: string,
   rawBreakdown?: RawElectricityMapsBreakdown | null,
   rawCarbon?: RawElectricityMapsCarbon | null,
-  rawReportedLoad?: { value?: number | null; totalReportedLoad?: number | null } | null
+  rawReportedLoad?: { value?: number | null; totalReportedLoad?: number | null } | null,
+  rawNetLoad?: { value?: number | null; netLoad?: number | null; isEstimated?: boolean } | null,
+  rawFossilOnlyCarbon?: { carbonIntensity?: number | null; value?: number | null; fossilOnlyCarbonIntensity?: number | null } | null,
+  rawCarbonFreeLevel?: { level?: string | null; carbonFreePercentageLevel?: string | null } | null,
+  rawCarbonIntensityLevel?: { level?: string | null; carbonIntensityLevel?: string | null } | null,
+  rawRenewableLevel?: { level?: string | null; renewablePercentageLevel?: string | null } | null,
 ): CountryElectricitySnapshot {
   const countryConfig = EU_COUNTRIES.find((c) => c.code === countryCode);
   if (!countryConfig) {
@@ -398,7 +476,14 @@ export function normalizeCountrySnapshot(
     unknown: null,
   };
 
-  const rawProd = rawBreakdown?.powerProductionBreakdown;
+  // Extraction de la production brute (support V4 electricity-mix et V3 power-breakdown)
+  const rawProd = (rawBreakdown as any)?.mix?.normal
+    ?? (rawBreakdown as any)?.mix?.production
+    ?? (rawBreakdown as any)?.normal
+    ?? (rawBreakdown as any)?.production
+    ?? rawBreakdown?.powerProductionBreakdown
+    ?? ((rawBreakdown as any)?.mix && !((rawBreakdown as any)?.mix?.normal || (rawBreakdown as any)?.mix?.['flow-traced']) ? (rawBreakdown as any)?.mix : undefined);
+
   if (rawProd) {
     for (const key of sourceKeys) {
       const val = rawProd[key];
@@ -406,14 +491,79 @@ export function normalizeCountrySnapshot(
     }
   }
 
-  // Totaux de production et consommation
-  const totalProduction = rawBreakdown?.powerProductionTotal !== undefined && rawBreakdown?.powerProductionTotal !== null
-    ? Math.round(rawBreakdown.powerProductionTotal)
-    : null;
+  // Consommation par filière (Flow-traced) : intègre les flux d'échanges physiques transfrontaliers (V4 / V3)
+  let consumptionBreakdown: Record<ProductionSourceKey, number | null> | undefined = undefined;
 
-  const totalConsumption = rawBreakdown?.powerConsumptionTotal !== undefined && rawBreakdown?.powerConsumptionTotal !== null
-    ? Math.round(rawBreakdown.powerConsumptionTotal)
-    : null;
+  const rawCons = (rawBreakdown as any)?.mix?.['flow-traced']
+    ?? (rawBreakdown as any)?.mix?.flowTraced
+    ?? (rawBreakdown as any)?.mix?.consumption
+    ?? (rawBreakdown as any)?.['flow-traced']
+    ?? (rawBreakdown as any)?.flowTraced
+    ?? (rawBreakdown as any)?.consumption
+    ?? rawBreakdown?.powerConsumptionBreakdown;
+
+  if (rawCons && Object.keys(rawCons).length > 0) {
+    consumptionBreakdown = {
+      nuclear: null,
+      hydro: null,
+      wind: null,
+      solar: null,
+      gas: null,
+      coal: null,
+      oil: null,
+      biomass: null,
+      geothermal: null,
+      unknown: null,
+    };
+    for (const key of sourceKeys) {
+      const val = rawCons[key];
+      consumptionBreakdown[key] = val !== undefined && val !== null ? Math.round(val) : null;
+    }
+  } else if (EU_REFERENCE_SNAPSHOTS[countryCode]?.consumptionBreakdown) {
+    consumptionBreakdown = EU_REFERENCE_SNAPSHOTS[countryCode].consumptionBreakdown;
+  }
+
+  // Stockage d'énergie (Battery, Hydro pumping / discharge) (V4)
+  const rawStorage = (rawBreakdown as any)?.mix?.storage
+    ?? (rawBreakdown as any)?.mix?.stockage
+    ?? (rawBreakdown as any)?.storage
+    ?? (rawBreakdown as any)?.stockage;
+
+  let storageBreakdown: Record<string, number | null> | undefined = undefined;
+  let storageTotal: number | null = null;
+  if (rawStorage && typeof rawStorage === 'object') {
+    storageBreakdown = {};
+    let sumStorage = 0;
+    for (const [k, v] of Object.entries(rawStorage)) {
+      if (v !== undefined && v !== null) {
+        const rounded = Math.round(v as number);
+        storageBreakdown[k] = rounded;
+        sumStorage += rounded;
+      } else {
+        storageBreakdown[k] = null;
+      }
+    }
+    storageTotal = sumStorage;
+  }
+
+  // Totaux de production et consommation (support V4 et V3)
+  const rawProdTotal = (rawBreakdown as any)?.mix?.productionTotal
+    ?? (rawBreakdown as any)?.productionTotal
+    ?? (rawBreakdown as any)?.totalProduction
+    ?? rawBreakdown?.powerProductionTotal;
+
+  const totalProduction = rawProdTotal !== undefined && rawProdTotal !== null
+    ? Math.round(rawProdTotal)
+    : (rawProd ? Object.values(productionBreakdown).reduce((acc: number, v) => acc + (v ?? 0), 0) : null);
+
+  const rawConsTotal = (rawBreakdown as any)?.mix?.consumptionTotal
+    ?? (rawBreakdown as any)?.consumptionTotal
+    ?? (rawBreakdown as any)?.totalConsumption
+    ?? rawBreakdown?.powerConsumptionTotal;
+
+  const totalConsumption = rawConsTotal !== undefined && rawConsTotal !== null
+    ? Math.round(rawConsTotal)
+    : (consumptionBreakdown ? Object.values(consumptionBreakdown).reduce((acc: number, v) => acc + (v ?? 0), 0) : null);
 
   // Total Reported Load : valeur fournie par le gestionnaire de réseau (TSO / GRT).
   // Strictly distinct from Total Load (méthodologie Electricity Maps).
@@ -422,13 +572,21 @@ export function normalizeCountrySnapshot(
     ? Math.round(rawReportedVal)
     : (EU_REFERENCE_SNAPSHOTS[countryCode]?.reportedLoad ?? null);
 
-  // Calcul rigoureux de la charge nette (Net Load) :
-  // Net load = Total Load - (Solar + Wind)
-  let netLoad: number | null = rawBreakdown?.netLoad ?? null;
-  if (netLoad === null && totalConsumption !== null) {
-    const solarVal = productionBreakdown.solar ?? 0;
-    const windVal = productionBreakdown.wind ?? 0;
-    netLoad = Math.max(0, Math.round(totalConsumption - (solarVal + windVal)));
+  // Signal officiel V4 : Net Load (/v4/net-load/latest)
+  // Issu prioritairement de l'API officielle Electricity Maps (prenant en compte stockage, échanges et profil de charge),
+  // avec fallback sur Total Load - Solaire - Éolien si non fourni directement.
+  const rawNetVal = rawNetLoad?.value ?? rawNetLoad?.netLoad ?? rawBreakdown?.netLoad;
+  let netLoad: number | null = rawNetVal !== undefined && rawNetVal !== null
+    ? Math.round(rawNetVal)
+    : null;
+
+  if (netLoad === null) {
+    if (totalConsumption !== null && (productionBreakdown.solar !== null || productionBreakdown.wind !== null)) {
+      const vRE = (productionBreakdown.solar ?? 0) + (productionBreakdown.wind ?? 0);
+      netLoad = Math.max(0, totalConsumption - vRE);
+    } else {
+      netLoad = EU_REFERENCE_SNAPSHOTS[countryCode]?.netLoad ?? null;
+    }
   }
 
   // Parts sans carbone et renouvelable
@@ -442,23 +600,43 @@ export function normalizeCountrySnapshot(
 
   // Calculs dérivés des nouveaux signaux V4
   const dominantSource = computeDominantSource(productionBreakdown, totalProduction);
+  const explicitFci = rawFossilOnlyCarbon?.carbonIntensity ?? rawFossilOnlyCarbon?.value ?? rawFossilOnlyCarbon?.fossilOnlyCarbonIntensity ?? rawCarbon?.fossilOnlyCarbonIntensity ?? EU_REFERENCE_SNAPSHOTS[countryCode]?.fossilOnlyCarbonIntensity;
   const fossilOnlyCarbonIntensity = computeFossilOnlyCarbonIntensity(
     productionBreakdown,
-    rawCarbon?.fossilOnlyCarbonIntensity
+    explicitFci
   );
 
-  const carbonIntensityLevel = rawCarbon?.carbonIntensityLevel ?? computeCarbonIntensityLevel(carbonIntensity);
-  const carbonFreeLevel = rawCarbon?.carbonFreeLevel ?? computeCarbonFreeLevel(fossilFreePercentage);
-  const renewableLevel = rawCarbon?.renewableLevel ?? computeRenewableLevel(renewablePercentage);
+  const rawApiCarbonIntensityLevel = parseSignalLevel(rawCarbonIntensityLevel?.level ?? rawCarbonIntensityLevel?.carbonIntensityLevel);
+  const carbonIntensityLevel = rawApiCarbonIntensityLevel ?? rawCarbon?.carbonIntensityLevel ?? EU_REFERENCE_SNAPSHOTS[countryCode]?.carbonIntensityLevel ?? null;
+  const rawApiCarbonFreeLevel = parseSignalLevel(rawCarbonFreeLevel?.level ?? rawCarbonFreeLevel?.carbonFreePercentageLevel);
+  const carbonFreeLevel = rawApiCarbonFreeLevel ?? rawCarbon?.carbonFreeLevel ?? EU_REFERENCE_SNAPSHOTS[countryCode]?.carbonFreeLevel ?? computeCarbonFreeLevel(fossilFreePercentage);
+  const rawApiRenewableLevel = parseSignalLevel(rawRenewableLevel?.level ?? rawRenewableLevel?.renewablePercentageLevel);
+  const renewableLevel = rawApiRenewableLevel ?? rawCarbon?.renewableLevel ?? EU_REFERENCE_SNAPSHOTS[countryCode]?.renewableLevel ?? null;
 
-  // Échanges transfrontaliers
-  const importTotal = rawBreakdown?.powerImportTotal !== undefined && rawBreakdown?.powerImportTotal !== null
-    ? Math.round(rawBreakdown.powerImportTotal)
-    : null;
+  // Échanges transfrontaliers (support officiel V4 electricity-mix / electricity-flows et V3)
+  const rawExportBreakdown = (rawBreakdown as any)?.mix?.exports
+    ?? (rawBreakdown as any)?.exports
+    ?? rawBreakdown?.powerExportBreakdown;
 
-  const exportTotal = rawBreakdown?.powerExportTotal !== undefined && rawBreakdown?.powerExportTotal !== null
-    ? Math.round(rawBreakdown.powerExportTotal)
-    : null;
+  const rawImportBreakdown = (rawBreakdown as any)?.mix?.imports
+    ?? (rawBreakdown as any)?.imports
+    ?? rawBreakdown?.powerImportBreakdown;
+
+  const rawImportTotal = (rawBreakdown as any)?.mix?.importTotal
+    ?? (rawBreakdown as any)?.importTotal
+    ?? (rawBreakdown?.powerImportTotal !== undefined && rawBreakdown?.powerImportTotal !== null ? Math.round(rawBreakdown.powerImportTotal) : null);
+
+  const importTotal = rawImportTotal !== null && rawImportTotal !== undefined
+    ? rawImportTotal
+    : (rawImportBreakdown ? Object.values(rawImportBreakdown).reduce((acc: number, val) => acc + (val ? Math.max(0, val as number) : 0), 0) : null);
+
+  const rawExportTotal = (rawBreakdown as any)?.mix?.exportTotal
+    ?? (rawBreakdown as any)?.exportTotal
+    ?? (rawBreakdown?.powerExportTotal !== undefined && rawBreakdown?.powerExportTotal !== null ? Math.round(rawBreakdown.powerExportTotal) : null);
+
+  const exportTotal = rawExportTotal !== null && rawExportTotal !== undefined
+    ? rawExportTotal
+    : (rawExportBreakdown ? Object.values(rawExportBreakdown).reduce((acc: number, val) => acc + (val ? Math.max(0, val as number) : 0), 0) : null);
 
   let netExport: number | null = null;
   if (exportTotal !== null && importTotal !== null) {
@@ -467,26 +645,26 @@ export function normalizeCountrySnapshot(
 
   // Décomposition des flux
   const exchangeFlows: CrossBorderFlow[] = [];
-  if (rawBreakdown?.powerExportBreakdown) {
-    for (const [toZone, flowVal] of Object.entries(rawBreakdown.powerExportBreakdown)) {
-      if (flowVal && flowVal > 0) {
+  if (rawExportBreakdown) {
+    for (const [toZone, flowVal] of Object.entries(rawExportBreakdown)) {
+      if (flowVal && (flowVal as number) > 0) {
         exchangeFlows.push({
           fromZone: zoneKey,
           toZone,
-          flowMW: Math.round(flowVal),
+          flowMW: Math.round(flowVal as number),
           isEstimated,
         });
       }
     }
   }
 
-  if (rawBreakdown?.powerImportBreakdown) {
-    for (const [fromZone, flowVal] of Object.entries(rawBreakdown.powerImportBreakdown)) {
-      if (flowVal && flowVal > 0) {
+  if (rawImportBreakdown) {
+    for (const [fromZone, flowVal] of Object.entries(rawImportBreakdown)) {
+      if (flowVal && (flowVal as number) > 0) {
         exchangeFlows.push({
           fromZone,
           toZone: zoneKey,
-          flowMW: Math.round(flowVal),
+          flowMW: Math.round(flowVal as number),
           isEstimated,
         });
       }
@@ -513,6 +691,9 @@ export function normalizeCountrySnapshot(
 
     // 13 signaux V4
     productionBreakdown,
+    consumptionBreakdown,
+    storageBreakdown,
+    storageTotal,
     exchangeFlows,
     dominantSource,
     totalConsumption,

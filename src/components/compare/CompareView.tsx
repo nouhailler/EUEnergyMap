@@ -5,6 +5,11 @@ import { EU_COUNTRIES } from '../../data/euCountries';
 import { PRODUCTION_SOURCES } from '../../data/sourcesMeta';
 import { UnitFormattedValue } from '../common/UnitFormattedValue';
 import { DataQualityBadge } from '../common/DataQualityBadge';
+import {
+  formatCarbonFreeLevelBadge,
+  formatCarbonIntensityLevelBadge,
+  formatRenewableLevelBadge,
+} from '../../services/electricityMaps/normalizers';
 
 interface CompareViewProps {
   snapshots: Record<string, CountryElectricitySnapshot>;
@@ -46,13 +51,18 @@ export const CompareView: React.FC<CompareViewProps> = ({ snapshots, onSelectCou
       ),
     },
     {
-      label: 'Palier Intensité Carbone',
-      description: 'Niveau qualitatif officiel Electricity Maps',
-      render: (s) => (
-        <span className="font-semibold text-slate-700 dark:text-slate-300">
-          {s?.carbonIntensityLevel ?? '—'}
-        </span>
-      ),
+      label: 'Carbon Intensity Level',
+      description: 'Comparé à la distribution récente de la zone (/v4/carbon-intensity-level/latest)',
+      render: (s) => {
+        if (!s?.carbonIntensityLevel) return <span className="text-slate-400">—</span>;
+        const b = formatCarbonIntensityLevelBadge(s.carbonIntensityLevel);
+        return (
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border ${b.bg} ${b.color}`}>
+            <span>{b.dot}</span>
+            <span>{b.text}</span>
+          </span>
+        );
+      },
     },
     {
       label: 'Intensité Fossile Seule',
@@ -77,13 +87,18 @@ export const CompareView: React.FC<CompareViewProps> = ({ snapshots, onSelectCou
       ),
     },
     {
-      label: 'Palier Renouvelable',
-      description: 'Classification qualitative des énergies renouvelables',
-      render: (s) => (
-        <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-          {s?.renewableLevel ?? '—'}
-        </span>
-      ),
+      label: 'Renewable Level',
+      description: 'Comparé à la moyenne récente de la zone (/v4/renewable-percentage-level/latest)',
+      render: (s) => {
+        if (!s?.renewableLevel) return <span className="text-slate-400">—</span>;
+        const b = formatRenewableLevelBadge(s.renewableLevel);
+        return (
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border ${b.bg} ${b.color}`}>
+            <span>{b.dot}</span>
+            <span>{b.text}</span>
+          </span>
+        );
+      },
     },
     {
       label: 'Part Bas-Carbone',
@@ -97,13 +112,18 @@ export const CompareView: React.FC<CompareViewProps> = ({ snapshots, onSelectCou
       ),
     },
     {
-      label: 'Palier Bas-Carbone',
-      description: 'Niveau de décarbonation global',
-      render: (s) => (
-        <span className="font-semibold text-indigo-600 dark:text-indigo-400">
-          {s?.carbonFreeLevel ?? '—'}
-        </span>
-      ),
+      label: 'Carbon-Free Level',
+      description: 'Comparé à la moyenne récente de la zone (/v4/carbon-free-percentage-level/latest)',
+      render: (s) => {
+        if (!s?.carbonFreeLevel) return <span className="text-slate-400">—</span>;
+        const b = formatCarbonFreeLevelBadge(s.carbonFreeLevel);
+        return (
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border ${b.bg} ${b.color}`}>
+            <span>{b.dot}</span>
+            <span>{b.text}</span>
+          </span>
+        );
+      },
     },
     {
       label: 'Total Load',
@@ -121,7 +141,7 @@ export const CompareView: React.FC<CompareViewProps> = ({ snapshots, onSelectCou
     },
     {
       label: 'Charge Nette (Net Load)',
-      description: 'Charge totale résiduelle après soustraction de l’éolien et du solaire',
+      description: 'Signal officiel V4 /v4/net-load/latest (charge résiduelle calculée par Electricity Maps)',
       render: (s) => (
         <UnitFormattedValue value={s?.netLoad} unit="GW" className="font-medium text-amber-600 dark:text-amber-400" />
       ),

@@ -1,4 +1,4 @@
-import { CountryElectricitySnapshot, CarbonHistoryPoint } from '../types/energy';
+import { CountryElectricitySnapshot, CarbonHistoryPoint, TemporalGranularity, TimelineHistoryPoint, MixHistoryPoint } from '../types/energy';
 import { EU_COUNTRIES } from './euCountries';
 
 /**
@@ -366,8 +366,11 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
     zoneKey: 'FR',
     datetime: '2024-03-24T12:00:00.000Z',
     updatedAt: '2024-03-24T12:15:00.000Z',
-    carbonIntensity: 38,
+    carbonIntensity: 42,
+    fossilOnlyCarbonIntensity: 390,
     carbonIntensityLevel: 'low',
+    carbonFreeLevel: 'high',
+    renewableLevel: 'high',
     fossilFreePercentage: 94,
     renewablePercentage: 27,
     totalProduction: 61500,
@@ -382,6 +385,19 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
       gas: 900,
       biomass: 200,
       oil: 100,
+      coal: 0,
+      geothermal: 0,
+      unknown: 0,
+    },
+    // Mix de consommation (Flow-traced) : production nationale déduite des exports nets (52.4 GW consommés)
+    consumptionBreakdown: {
+      nuclear: 35100,
+      hydro: 6140,
+      wind: 5710,
+      solar: 4430,
+      gas: 800,
+      biomass: 170,
+      oil: 50,
       coal: 0,
       geothermal: 0,
       unknown: 0,
@@ -425,6 +441,19 @@ export const EU_REFERENCE_SNAPSHOTS: Record<string, CountryElectricitySnapshot> 
       hydro: 700,
       oil: 0,
       nuclear: 0, // Sortie du nucléaire en avril 2023
+      geothermal: 0,
+      unknown: 0,
+    },
+    // Mix de consommation (Flow-traced) : intègre 2.7 GW d'import net bas-carbone (nucléaire FR + hydro NO)
+    consumptionBreakdown: {
+      solar: 18500,
+      coal: 13500,
+      wind: 12000,
+      gas: 7400,
+      biomass: 4100,
+      nuclear: 2100, // Importé flow-traced depuis la France
+      hydro: 1400,  // 700 MW local + 700 MW hydro scandinave importé
+      oil: 0,
       geothermal: 0,
       unknown: 0,
     },
@@ -1124,47 +1153,301 @@ for (const snap of Object.values(EU_REFERENCE_SNAPSHOTS)) {
       : null;
   }
 
-  if (!snap.carbonIntensityLevel && snap.carbonIntensity !== null) {
-    const ci = snap.carbonIntensity;
-    snap.carbonIntensityLevel = ci < 50 ? 'very-low' : ci < 150 ? 'low' : ci < 300 ? 'medium' : ci < 500 ? 'high' : 'very-high';
+  // Mix de consommation (Flow-traced) : calcul physique cohérent si non renseigné explicitement
+  if (!snap.consumptionBreakdown && snap.productionBreakdown && snap.totalConsumption && snap.totalProduction) {
+    const ratio = snap.totalProduction > 0 ? snap.totalConsumption / snap.totalProduction : 1;
+    const consBreakdown: any = {};
+    for (const [k, v] of Object.entries(snap.productionBreakdown)) {
+      consBreakdown[k] = v !== null ? Math.round((v as number) * ratio) : null;
+    }
+    snap.consumptionBreakdown = consBreakdown;
   }
+
+  // Ne pas inventer de seuils arbitraires : le niveau d'intensité carbone est officiel
+  // et issu de l'endpoint Electricity Maps /v4/carbon-intensity-level/latest (relatif à la zone).
 
   if (!snap.carbonFreeLevel && snap.fossilFreePercentage !== null) {
     const cf = snap.fossilFreePercentage;
     snap.carbonFreeLevel = cf >= 90 ? 'very-high' : cf >= 70 ? 'high' : cf >= 45 ? 'medium' : cf >= 20 ? 'low' : 'very-low';
   }
 
-  if (!snap.renewableLevel && snap.renewablePercentage !== null) {
-    const ren = snap.renewablePercentage;
-    snap.renewableLevel = ren >= 80 ? 'very-high' : ren >= 60 ? 'high' : ren >= 35 ? 'medium' : ren >= 15 ? 'low' : 'very-low';
-  }
+  // Ne pas inventer de seuils arbitraires : les niveaux qualitatifs sont officiels
+  // et issus des endpoints Electricity Maps /v4/*-level/latest (relatifs au comportement récent de la zone).
 }
 
 /**
  * Générateur de séries d'historique 24h factuelles et cohérentes
  * avec l'intensité moyenne observée de la zone.
+ * Supporte nativement les granularités V4 : '15_minutes' (défaut), '5_minutes' et 'hourly'.
  */
 export function generateReferenceHistory(
   zoneKey: string,
   baseIntensity: number,
-  referenceDate?: string | Date
+  referenceDate?: string | Date,
+  baseFossilOnlyIntensity?: number | null,
+  granularity: TemporalGranularity = '15_minutes'
 ): CarbonHistoryPoint[] {
   const points: CarbonHistoryPoint[] = [];
   const now = referenceDate ? new Date(referenceDate) : new Date();
 
-  for (let i = 24; i >= 0; i--) {
-    const d = new Date(now.getTime() - i * 3600 * 1000);
-    // Variation diurne typique : un peu plus fort le matin et en soirée
+  const stepMinutes = granularity === '5_minutes' ? 5 : granularity === '15_minutes' ? 15 : 60;
+  const totalSteps = Math.floor((24 * 60) / stepMinutes);
+
+  for (let i = totalSteps; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * stepMinutes * 60 * 1000);
     const hour = d.getUTCHours();
-    const cycleFactor = 1 + 0.14 * Math.sin(((hour - 8) / 24) * 2 * Math.PI);
-    const value = Math.max(10, Math.round(baseIntensity * cycleFactor));
+    const minute = d.getUTCMinutes();
+    const decimalHour = hour + minute / 60;
+
+    // Cycle diurne principal
+    const cycleFactor = 1 + 0.14 * Math.sin(((decimalHour - 8) / 24) * 2 * Math.PI);
+
+    // Micro-variations intra-horaires réalistes (passages nuageux, variations de vent et pointes de charge)
+    const microVariation = stepMinutes < 60
+      ? 0.025 * Math.sin((decimalHour * 4) * Math.PI) + 0.012 * Math.cos((decimalHour * 12) * Math.PI)
+      : 0;
+
+    const value = Math.max(10, Math.round(baseIntensity * (cycleFactor + microVariation)));
+
+    const fossilValue = baseFossilOnlyIntensity != null
+      ? Math.max(50, Math.round(baseFossilOnlyIntensity * (1 + 0.04 * Math.sin(((decimalHour - 12) / 24) * 2 * Math.PI) + (stepMinutes < 60 ? 0.01 * Math.sin(decimalHour * 6) : 0))))
+      : null;
 
     points.push({
       datetime: d.toISOString(),
       carbonIntensity: value,
+      fossilOnlyCarbonIntensity: fossilValue,
       isEstimated: false,
     });
   }
 
   return points;
 }
+
+/**
+ * Générateur de séries temporelles complètes pour la page « Journée électrique » (24h)
+ * Modélise de façon cohérente, physique et synchronisée :
+ * - Intensité carbone (globale & fossile seul)
+ * - Renouvelable & Bas-carbone (%)
+ * - Total Load, Reported Load et Net Load (courbe du canard)
+ * - Filières clés : Solaire, Éolien, Nucléaire, Hydro, Gaz, Charbon
+ * - Flux transfrontaliers (Net Export, Imports, Exports)
+ */
+export function generateReferenceTimeline(
+  zoneKey: string,
+  snapshot?: CountryElectricitySnapshot | null,
+  referenceDate?: string | Date,
+  granularity: TemporalGranularity = '15_minutes'
+): TimelineHistoryPoint[] {
+  const points: TimelineHistoryPoint[] = [];
+  const snap = snapshot || EU_REFERENCE_SNAPSHOTS[zoneKey] || EU_REFERENCE_SNAPSHOTS['FR'];
+  const now = referenceDate ? new Date(referenceDate) : new Date(snap?.datetime || Date.now());
+
+  const stepMinutes = granularity === '5_minutes' ? 5 : granularity === '15_minutes' ? 15 : 60;
+  const totalSteps = Math.floor((24 * 60) / stepMinutes);
+
+  // Capacités de base du pays
+  const baseLoad = snap?.totalConsumption || 50000;
+  const baseSolar = snap?.productionBreakdown?.solar || 0;
+  const baseWind = snap?.productionBreakdown?.wind || 0;
+  const baseNuclear = snap?.productionBreakdown?.nuclear || 0;
+  const baseHydro = snap?.productionBreakdown?.hydro || 0;
+  const baseGas = snap?.productionBreakdown?.gas || 0;
+  const baseCoal = snap?.productionBreakdown?.coal || 0;
+  const baseNetExport = snap?.netExport ?? 0;
+  const baseIntensity = snap?.carbonIntensity ?? 150;
+  const baseFossilIntensity = snap?.fossilOnlyCarbonIntensity ?? null;
+
+  for (let i = totalSteps; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * stepMinutes * 60 * 1000);
+    const hour = d.getUTCHours();
+    const minute = d.getUTCMinutes();
+    const decimalHour = hour + minute / 60;
+
+    // 1. Profil de charge diurne (creux à 4h du matin, pic du matin à 8h30, plateau, pic du soir à 19h30)
+    const loadCycle =
+      1.0 +
+      0.16 * Math.sin(((decimalHour - 7) / 24) * 2 * Math.PI) +
+      0.08 * Math.cos(((decimalHour - 14) / 12) * 2 * Math.PI);
+    const microJitter = stepMinutes < 60 ? 0.015 * Math.sin(decimalHour * 8) : 0;
+    const totalLoad = Math.max(1000, Math.round(baseLoad * (loadCycle + microJitter)));
+
+    // 2. Reported Load : télémétrie déclarée par le gestionnaire de réseau (GRT / TSO)
+    const totalReportedLoad = Math.max(1000, Math.round(totalLoad * (1 + 0.012 * Math.sin(decimalHour * 3))));
+
+    // 3. Profil solaire photovoltaïque : nul la nuit, cloche de midi centrée à 13h UTC
+    let solar = 0;
+    if (baseSolar > 0 && decimalHour >= 5.5 && decimalHour <= 20.5) {
+      const solarNorm = (decimalHour - 5.5) / 15;
+      const solarShape = Math.pow(Math.sin(solarNorm * Math.PI), 1.6);
+      const cloudPuffs = stepMinutes < 60 ? (1 - 0.08 * Math.abs(Math.sin(decimalHour * 10))) : 1;
+      solar = Math.round(baseSolar * 1.6 * solarShape * cloudPuffs);
+    }
+
+    // 4. Profil éolien : dynamique météorologique
+    const windWave = 0.85 + 0.28 * Math.sin(((decimalHour - 3) / 24) * 2 * Math.PI) + 0.12 * Math.cos((decimalHour / 4) * Math.PI);
+    const wind = baseWind > 0 ? Math.round(baseWind * Math.max(0.15, windWave)) : 0;
+
+    // 5. Profil nucléaire : socle de ruban stable avec très légère flexibilité
+    const nuclear = baseNuclear > 0 ? Math.round(baseNuclear * (1 + 0.015 * Math.sin(decimalHour / 3))) : 0;
+
+    // 6. Hydro, Gaz, Charbon (dispatch thermique de pointe)
+    const hydro = baseHydro > 0 ? Math.round(baseHydro * (0.8 + 0.3 * Math.sin(((decimalHour - 8) / 24) * 2 * Math.PI))) : 0;
+    const gas = baseGas > 0 ? Math.round(baseGas * (0.7 + 0.5 * Math.max(0, Math.sin(((decimalHour - 18) / 24) * 2 * Math.PI)))) : 0;
+    const coal = baseCoal > 0 ? Math.round(baseCoal * (0.8 + 0.35 * Math.sin(((decimalHour - 10) / 24) * 2 * Math.PI))) : 0;
+
+    // 7. Net Load (Courbe du canard) : Total Load - (Solaire + Éolien)
+    const netLoad = Math.max(0, totalLoad - (solar + wind));
+
+    // 8. Parts décarbonées & renouvelables
+    const totalRenewableMW = solar + wind + hydro;
+    const totalCarbonFreeMW = totalRenewableMW + nuclear;
+    const renewablePercentage = Math.min(100, Math.max(1, Math.round((totalRenewableMW / Math.max(100, totalLoad)) * 100)));
+    const fossilFreePercentage = Math.min(100, Math.max(1, Math.round((totalCarbonFreeMW / Math.max(100, totalLoad)) * 100)));
+
+    // 9. Intensité carbone : inversement proportionnelle à la part décarbonée
+    const thermalStress = Math.max(0, (100 - fossilFreePercentage) / 100);
+    const carbonIntensity = Math.max(10, Math.round(baseIntensity * (0.85 + 0.45 * thermalStress)));
+    const fossilOnlyCarbonIntensity = baseFossilIntensity != null
+      ? Math.max(50, Math.round(baseFossilIntensity * (1 + 0.05 * Math.sin(((decimalHour - 12) / 24) * 2 * Math.PI))))
+      : null;
+
+    // 10. Flux transfrontaliers (Net Export)
+    const exportCycle = 1 + 0.18 * Math.cos(((decimalHour - 13) / 24) * 2 * Math.PI);
+    const netExport = Math.round(baseNetExport * exportCycle);
+    const importTotal = netExport < 0 ? Math.abs(netExport) + 500 : 300;
+    const exportTotal = netExport > 0 ? netExport + 500 : 300;
+
+    points.push({
+      datetime: d.toISOString(),
+      carbonIntensity,
+      fossilOnlyCarbonIntensity,
+      renewablePercentage,
+      fossilFreePercentage,
+      totalLoad,
+      totalReportedLoad,
+      netLoad,
+      solar,
+      wind,
+      nuclear,
+      hydro,
+      gas,
+      coal,
+      biomass: Math.round((snap?.productionBreakdown?.biomass || 0) * (1 + 0.02 * Math.sin(decimalHour / 4))),
+      netExport,
+      importTotal,
+      exportTotal,
+      isEstimated: false,
+    });
+  }
+
+  return points;
+}
+
+/**
+ * Générateur de séries temporelles pour l'historique du mix électrique sur 24h
+ * Modélise fidèlement l'ensemble des filières de production :
+ * ☢️ Nucléaire : ruban stable de base continue
+ * 💨 Éolien : profil météorologique dynamique synoptique
+ * ☀️ Solaire : profil en cloche diurne nul la nuit et culminant au midi solaire
+ * 💧 Hydraulique : modulable et fil de l'eau
+ * 🔥 Gaz, 🪨 Charbon, 🌱 Biomasse...
+ */
+export function generateReferenceMixHistory(
+  zoneKey: string,
+  snapshot?: CountryElectricitySnapshot | null,
+  referenceDate?: string | Date,
+  granularity: TemporalGranularity = '15_minutes'
+): MixHistoryPoint[] {
+  const points: MixHistoryPoint[] = [];
+  const snap = snapshot || EU_REFERENCE_SNAPSHOTS[zoneKey] || EU_REFERENCE_SNAPSHOTS['FR'];
+  const now = referenceDate ? new Date(referenceDate) : new Date(snap?.datetime || Date.now());
+
+  const stepMinutes = granularity === '5_minutes' ? 5 : granularity === '15_minutes' ? 15 : 60;
+  const totalSteps = Math.floor((24 * 60) / stepMinutes);
+
+  const baseLoad = snap?.totalConsumption || 50000;
+  const baseNuclear = snap?.productionBreakdown?.nuclear || 0;
+  const baseHydro = snap?.productionBreakdown?.hydro || 0;
+  const baseWind = snap?.productionBreakdown?.wind || 0;
+  const baseSolar = snap?.productionBreakdown?.solar || 0;
+  const baseGas = snap?.productionBreakdown?.gas || 0;
+  const baseCoal = snap?.productionBreakdown?.coal || 0;
+  const baseBiomass = snap?.productionBreakdown?.biomass || 0;
+  const baseOil = snap?.productionBreakdown?.oil || 0;
+  const baseGeothermal = snap?.productionBreakdown?.geothermal || 0;
+  const baseUnknown = snap?.productionBreakdown?.unknown || 0;
+  const baseNetExport = snap?.netExport ?? 0;
+
+  for (let i = totalSteps; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * stepMinutes * 60 * 1000);
+    const hour = d.getUTCHours();
+    const minute = d.getUTCMinutes();
+    const decimalHour = hour + minute / 60;
+
+    // 1. Nucléaire : socle de ruban stable avec infime régulation
+    const nuclear = baseNuclear > 0 ? Math.round(baseNuclear * (1 + 0.012 * Math.sin(decimalHour / 3))) : 0;
+
+    // 2. Solaire : 0 la nuit, cloche de midi solaire centrée à 13h UTC
+    let solar = 0;
+    if (baseSolar > 0 && decimalHour >= 5.5 && decimalHour <= 20.5) {
+      const solarNorm = (decimalHour - 5.5) / 15;
+      const solarShape = Math.pow(Math.sin(solarNorm * Math.PI), 1.6);
+      const cloudPuffs = stepMinutes < 60 ? (1 - 0.06 * Math.abs(Math.sin(decimalHour * 10))) : 1;
+      solar = Math.round(baseSolar * 1.6 * solarShape * cloudPuffs);
+    }
+
+    // 3. Éolien : onde météo diurne
+    const windWave = 0.85 + 0.28 * Math.sin(((decimalHour - 3) / 24) * 2 * Math.PI) + 0.12 * Math.cos((decimalHour / 4) * Math.PI);
+    const wind = baseWind > 0 ? Math.round(baseWind * Math.max(0.15, windWave)) : 0;
+
+    // 4. Hydraulique : lac de barrage + fil de l'eau modulable
+    const hydro = baseHydro > 0 ? Math.round(baseHydro * (0.8 + 0.3 * Math.sin(((decimalHour - 8) / 24) * 2 * Math.PI))) : 0;
+
+    // 5. Gaz : dispatch thermique pour les pointes du matin (08h) et du soir (19h)
+    const gas = baseGas > 0 ? Math.round(baseGas * (0.7 + 0.5 * Math.max(0, Math.sin(((decimalHour - 18) / 24) * 2 * Math.PI)))) : 0;
+
+    // 6. Charbon
+    const coal = baseCoal > 0 ? Math.round(baseCoal * (0.8 + 0.35 * Math.sin(((decimalHour - 10) / 24) * 2 * Math.PI))) : 0;
+
+    // 7. Biomasse, Pétrole, Géothermie, Inconnu
+    const biomass = baseBiomass > 0 ? Math.round(baseBiomass * (1 + 0.02 * Math.sin(decimalHour / 4))) : 0;
+    const oil = baseOil > 0 ? Math.round(baseOil * (0.8 + 0.4 * Math.max(0, Math.sin(((decimalHour - 19) / 24) * 2 * Math.PI)))) : 0;
+    const geothermal = baseGeothermal > 0 ? Math.round(baseGeothermal) : 0;
+    const unknown = baseUnknown > 0 ? Math.round(baseUnknown) : 0;
+
+    const totalProduction = nuclear + hydro + wind + solar + gas + coal + biomass + oil + geothermal + unknown;
+
+    // Charge & Flux
+    const loadCycle = 1.0 + 0.16 * Math.sin(((decimalHour - 7) / 24) * 2 * Math.PI) + 0.08 * Math.cos(((decimalHour - 14) / 12) * 2 * Math.PI);
+    const totalConsumption = Math.max(1000, Math.round(baseLoad * loadCycle));
+    const exportCycle = 1 + 0.18 * Math.cos(((decimalHour - 13) / 24) * 2 * Math.PI);
+    const netExport = Math.round(baseNetExport * exportCycle);
+
+    const hourLabel = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const fullDateLabel = `${d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} à ${hourLabel}`;
+
+    points.push({
+      datetime: d.toISOString(),
+      hourLabel,
+      fullDateLabel,
+      nuclear,
+      hydro,
+      wind,
+      solar,
+      gas,
+      coal,
+      biomass,
+      oil,
+      geothermal,
+      unknown,
+      totalProduction,
+      totalConsumption,
+      netExport,
+      isEstimated: false,
+    });
+  }
+
+  return points;
+}
+

@@ -38,8 +38,33 @@ export const ApiV4SignalsSection: React.FC<ApiV4SignalsSectionProps> = ({ snapsh
   }, [signals, selectedCategory]);
 
   // Rendu de badge de niveau qualitatif
-  const renderLevelBadge = (level?: SignalLevel | null) => {
+  const renderLevelBadge = (level?: SignalLevel | null, signalKey?: string) => {
     if (!level) return <span className="text-xs text-slate-400 font-mono">—</span>;
+
+    if (signalKey === 'carbon_free_level' || signalKey === 'renewable_level') {
+      const isHigh = level === 'high' || level === 'very-high';
+      const isMedium = level === 'medium';
+
+      return (
+        <span
+          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold border tracking-wide ${
+            isHigh
+              ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
+              : isMedium
+              ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300'
+              : 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300'
+          }`}
+        >
+          <span>{isHigh ? '🟢' : isMedium ? '🟡' : '🔴'}</span>
+          <span className="font-mono uppercase font-extrabold">
+            {isHigh ? 'HIGH' : isMedium ? 'MODERATE' : 'LOW'}
+          </span>
+          <span className="text-[10px] font-normal opacity-85">
+            ({level === 'very-high' ? 'Très élevé' : level === 'high' ? 'Élevé' : level === 'medium' ? 'Modéré' : 'Faible'})
+          </span>
+        </span>
+      );
+    }
 
     const styles: Record<SignalLevel, { bg: string; text: string; label: string }> = {
       'very-low': {
@@ -235,7 +260,7 @@ export const ApiV4SignalsSection: React.FC<ApiV4SignalsSectionProps> = ({ snapsh
               <div className="pt-1">
                 {isLevel ? (
                   <div className="flex items-center gap-2">
-                    {renderLevelBadge(sig.level)}
+                    {renderLevelBadge(sig.level, sig.key)}
                   </div>
                 ) : (
                   <div className="flex items-baseline gap-1.5">

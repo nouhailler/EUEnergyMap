@@ -15,6 +15,7 @@ import { CompareView } from './components/compare/CompareView';
 import { CarbonView } from './components/carbon/CarbonView';
 import { RenewablesView } from './components/renewables/RenewablesView';
 import { FlowsView } from './components/flows/FlowsView';
+import { DayTimelineView } from './components/timeline/DayTimelineView';
 import { Footer } from './components/common/Footer';
 import { OfflineIndicator } from './components/common/OfflineIndicator';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
@@ -46,7 +47,7 @@ export default function App() {
           return;
         }
       }
-      if (['compare', 'carbon', 'renewables', 'flows'].includes(hash)) {
+      if (['timeline', 'compare', 'carbon', 'renewables', 'flows'].includes(hash)) {
         setCurrentView(hash);
       } else {
         setCurrentView('dashboard');
@@ -177,6 +178,7 @@ export default function App() {
                 snapshot={activeCountrySnapshot}
                 onBack={() => handleNavigate('dashboard')}
                 onSelectCountry={handleSelectCountry}
+                onNavigate={handleNavigate}
               />
             )}
 
@@ -193,6 +195,7 @@ export default function App() {
               <CarbonView
                 snapshots={snapshots}
                 onSelectCountry={handleSelectCountry}
+                onNavigate={handleNavigate}
               />
             )}
 
@@ -209,6 +212,16 @@ export default function App() {
               <FlowsView
                 snapshots={snapshots}
                 onSelectCountry={handleSelectCountry}
+              />
+            )}
+
+            {/* Vue Journée Électrique (Timeline 24h) */}
+            {currentView === 'timeline' && (
+              <DayTimelineView
+                snapshots={snapshots}
+                selectedCountryCode={selectedCountryCode}
+                onSelectCountry={handleSelectCountry}
+                onNavigate={handleNavigate}
               />
             )}
           </>

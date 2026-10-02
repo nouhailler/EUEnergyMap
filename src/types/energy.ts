@@ -63,9 +63,11 @@ export interface CountryElectricitySnapshot {
 
   // --- Les 13 signaux officiels de l'API Electricity Maps V4 ---
 
-  // 1. Electricity mix : Mix de production et consommation par filière
+  // 1. Electricity mix : Mix de production et consommation par filière (V4)
   productionBreakdown: Record<ProductionSourceKey, number | null>;
   consumptionBreakdown?: Record<ProductionSourceKey, number | null>;
+  storageBreakdown?: Record<string, number | null>;
+  storageTotal?: number | null;
 
   // 2. Electricity flows : Flux transfrontaliers physiques & imports / exports
   exchangeFlows: CrossBorderFlow[];    // Détail des flux vers/depuis les voisins
@@ -130,15 +132,240 @@ export interface ApiV4SignalItem {
   apiEndpointV4: string;
 }
 
+export type TemporalGranularity = '5_minutes' | '15_minutes' | 'hourly';
+
+export interface GranularityOption {
+  value: TemporalGranularity;
+  label: string;
+  shortLabel: string;
+  description: string;
+  points24h: number;
+}
+
+export const GRANULARITY_OPTIONS: GranularityOption[] = [
+  {
+    value: '5_minutes',
+    label: '5 minutes',
+    shortLabel: '5 min',
+    description: 'Ultra-haute fréquence (ajustements temps réel et réserves primaires)',
+    points24h: 288,
+  },
+  {
+    value: '15_minutes',
+    label: '15 minutes',
+    shortLabel: '15 min',
+    description: 'Résolution standard européenne (marchés infra-journaliers ENTSO-E / Euphemia)',
+    points24h: 96,
+  },
+  {
+    value: 'hourly',
+    label: '1 heure',
+    shortLabel: '1 h',
+    description: 'Résolution horaire historique (marché Day-Ahead)',
+    points24h: 24,
+  },
+];
+
 export interface CarbonHistoryPoint {
   datetime: string;
   carbonIntensity: number | null;
+  fossilOnlyCarbonIntensity?: number | null;
   isEstimated: boolean;
 }
 
 export interface CountryHistoryData {
   zoneKey: string;
+  granularity?: TemporalGranularity;
   history: CarbonHistoryPoint[];
+  isDemoFallback?: boolean;
+}
+
+export type TimelineIndicator =
+  | 'carbonIntensity'
+  | 'renewable'
+  | 'carbonFree'
+  | 'totalLoad'
+  | 'reportedLoad'
+  | 'netLoad'
+  | 'solar'
+  | 'wind'
+  | 'nuclear'
+  | 'flows';
+
+export interface TimelineIndicatorMeta {
+  key: TimelineIndicator;
+  label: string;
+  unit: string;
+  shortUnit: string;
+  color: string;
+  gradientFrom: string;
+  gradientTo: string;
+  description: string;
+  badgeLabel?: string;
+}
+
+export const TIMELINE_INDICATORS: TimelineIndicatorMeta[] = [
+  {
+    key: 'carbonIntensity',
+    label: 'Intensité carbone',
+    unit: 'gCO₂eq/kWh',
+    shortUnit: 'g',
+    color: '#e11d48',
+    gradientFrom: '#e11d48',
+    gradientTo: '#fb7185',
+    description: 'Émissions directes et cycle de vie par kWh produit/consommé',
+  },
+  {
+    key: 'renewable',
+    label: 'Renouvelable',
+    unit: '%',
+    shortUnit: '%',
+    color: '#10b981',
+    gradientFrom: '#10b981',
+    gradientTo: '#34d399',
+    description: 'Part des énergies renouvelables (éolien, solaire, hydro, biomasse)',
+  },
+  {
+    key: 'carbonFree',
+    label: 'Bas-carbone',
+    unit: '%',
+    shortUnit: '%',
+    color: '#6366f1',
+    gradientFrom: '#6366f1',
+    gradientTo: '#818cf8',
+    description: 'Électricité sans émissions directes de CO₂ (renouvelable + nucléaire)',
+  },
+  {
+    key: 'totalLoad',
+    label: 'Total Load',
+    unit: 'MW',
+    shortUnit: 'GW',
+    color: '#0284c7',
+    gradientFrom: '#0284c7',
+    gradientTo: '#38bdf8',
+    description: 'Consommation électrique brute totale du territoire (puissance appelée)',
+  },
+  {
+    key: 'reportedLoad',
+    label: 'Reported Load',
+    unit: 'MW',
+    shortUnit: 'GW',
+    color: '#0d9488',
+    gradientFrom: '#0d9488',
+    gradientTo: '#2dd4bf',
+    description: 'Charge officiellement déclarée par le gestionnaire de réseau (GRT / TSO)',
+  },
+  {
+    key: 'netLoad',
+    label: 'Net Load',
+    unit: 'MW',
+    shortUnit: 'GW',
+    color: '#f59e0b',
+    gradientFrom: '#f59e0b',
+    gradientTo: '#fbbf24',
+    description: 'Charge résiduelle nette à couvrir hors énergies variables (Load - Solaire - Éolien)',
+  },
+  {
+    key: 'solar',
+    label: 'Solaire',
+    unit: 'MW',
+    shortUnit: 'GW',
+    color: '#eab308',
+    gradientFrom: '#eab308',
+    gradientTo: '#fde047',
+    description: 'Production photovoltaïque instantanée sur le réseau',
+  },
+  {
+    key: 'wind',
+    label: 'Éolien',
+    unit: 'MW',
+    shortUnit: 'GW',
+    color: '#06b6d4',
+    gradientFrom: '#06b6d4',
+    gradientTo: '#67e8f9',
+    description: 'Production éolienne terrestre (onshore) et en mer (offshore)',
+  },
+  {
+    key: 'nuclear',
+    label: 'Nucléaire',
+    unit: 'MW',
+    shortUnit: 'GW',
+    color: '#8b5cf6',
+    gradientFrom: '#8b5cf6',
+    gradientTo: '#a78bfa',
+    description: 'Production des réacteurs nucléaires de base continue',
+  },
+  {
+    key: 'flows',
+    label: 'Flux',
+    unit: 'MW',
+    shortUnit: 'GW',
+    color: '#14b8a6',
+    gradientFrom: '#14b8a6',
+    gradientTo: '#2dd4bf',
+    description: 'Solde physique net des échanges transfrontaliers (+ exportateur, - importateur)',
+  },
+];
+
+export interface TimelineHistoryPoint {
+  datetime: string;
+  carbonIntensity: number | null;
+  fossilOnlyCarbonIntensity: number | null;
+  renewablePercentage: number | null;
+  fossilFreePercentage: number | null;
+  totalLoad: number | null;
+  totalReportedLoad: number | null;
+  netLoad: number | null;
+  solar: number | null;
+  wind: number | null;
+  nuclear: number | null;
+  hydro: number | null;
+  gas: number | null;
+  coal: number | null;
+  biomass?: number | null;
+  oil?: number | null;
+  geothermal?: number | null;
+  unknown?: number | null;
+  totalProduction?: number | null;
+  netExport: number | null;
+  importTotal: number | null;
+  exportTotal: number | null;
+  isEstimated: boolean;
+}
+
+export interface TimelineData {
+  zoneKey: string;
+  granularity: TemporalGranularity;
+  points: TimelineHistoryPoint[];
+  isDemoFallback?: boolean;
+}
+
+export interface MixHistoryPoint {
+  datetime: string;
+  hourLabel: string;
+  fullDateLabel: string;
+  nuclear: number;
+  hydro: number;
+  wind: number;
+  solar: number;
+  gas: number;
+  coal: number;
+  biomass: number;
+  oil: number;
+  geothermal: number;
+  unknown: number;
+  totalProduction: number;
+  totalConsumption: number;
+  netExport: number;
+  isEstimated: boolean;
+}
+
+export interface MixHistoryData {
+  zoneKey: string;
+  granularity: TemporalGranularity;
+  points: MixHistoryPoint[];
+  isDemoFallback?: boolean;
+  timestamp?: string;
 }
 
 export type IndicatorMode =

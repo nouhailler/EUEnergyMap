@@ -17,6 +17,7 @@ import {
   Database,
   Radio,
   SlidersHorizontal,
+  TrendingUp,
 } from 'lucide-react';
 import { EU_COUNTRIES } from '../../data/euCountries';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
@@ -114,6 +115,14 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
           icon: Globe2,
           color: 'text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60',
           badge: 'Principal',
+        },
+        {
+          id: 'timeline',
+          title: '📈 Journée Électrique (Timeline 24h)',
+          subtitle: 'Courbes continues des 10 signaux V4 (carbone, charge, net load, mix)',
+          icon: TrendingUp,
+          color: 'text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/60',
+          badge: 'Nouveau',
         },
       ],
     },

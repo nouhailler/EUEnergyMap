@@ -1,6 +1,6 @@
-import { CountryElectricitySnapshot, CountryHistoryData, CarbonHistoryPoint } from '../../types/energy';
+import { CountryElectricitySnapshot, CountryHistoryData, CarbonHistoryPoint, TemporalGranularity, TimelineData, TimelineHistoryPoint, MixHistoryData } from '../../types/energy';
 import { clientCache } from './cache';
-import { EU_REFERENCE_SNAPSHOTS, generateReferenceHistory } from '../../data/referenceData';
+import { EU_REFERENCE_SNAPSHOTS, generateReferenceHistory, generateReferenceTimeline, generateReferenceMixHistory } from '../../data/referenceData';
 
 const IN_FLIGHT_PROMISES = new Map<string, Promise<unknown>>();
 
@@ -153,25 +153,28 @@ export class ElectricityMapsClient {
   }
 
   /**
-   * Récupère l'historique 24h d'une zone
+   * Récupère l'historique 24h d'une zone avec support des granularités V4
+   * ('15_minutes' par défaut, '5_minutes', 'hourly')
    */
   async getZoneHistory(
     zoneKey: string,
     fallbackIntensity?: number,
-    referenceDate?: string | Date
+    referenceDate?: string | Date,
+    granularity: TemporalGranularity = '15_minutes'
   ): Promise<CountryHistoryData> {
-    const cacheKey = `zone_history_${zoneKey}`;
+    const cacheKey = `zone_history_${zoneKey}_${granularity}`;
     const cached = clientCache.get<CountryHistoryData>(cacheKey);
     if (cached && Array.isArray(cached.history) && cached.history.length > 0) return cached;
 
     try {
-      const res = await fetch(`${this.baseUrl}/history?zone=${encodeURIComponent(zoneKey)}`);
+      const res = await fetch(`${this.baseUrl}/history?zone=${encodeURIComponent(zoneKey)}&granularity=${encodeURIComponent(granularity)}`);
       if (!res.ok) {
         throw new Error(`Erreur HTTP ${res.status}`);
       }
       const data: ZoneHistoryResponse = await res.json();
       const result: CountryHistoryData = {
         zoneKey: data?.zoneKey || zoneKey,
+        granularity,
         history: Array.isArray(data?.history) ? data.history : [],
       };
       if (result.history.length > 0) {
@@ -182,11 +185,106 @@ export class ElectricityMapsClient {
     } catch {
       const snapshot = EU_REFERENCE_SNAPSHOTS[zoneKey];
       const baseIntensity = fallbackIntensity ?? snapshot?.carbonIntensity ?? 150;
-      const history = generateReferenceHistory(zoneKey, baseIntensity, referenceDate || snapshot?.datetime);
+      const baseFossil = snapshot?.fossilOnlyCarbonIntensity ?? null;
+      const history = generateReferenceHistory(zoneKey, baseIntensity, referenceDate || snapshot?.datetime, baseFossil, granularity);
       return {
         zoneKey,
+        granularity,
         history: Array.isArray(history) ? history : [],
+        isDemoFallback: true,
       };
+    }
+  }
+
+  /**
+   * Récupère les séries temporelles complètes de la « Journée électrique » (24h)
+   * Couvre : Carbone, Renouvelable, Bas-carbone, Total Load, Reported Load, Net Load,
+   * Solaire, Éolien, Nucléaire, Flux transfrontaliers.
+   */
+  async getZoneTimeline(
+    zoneKey: string,
+    granularity: TemporalGranularity = '15_minutes'
+  ): Promise<TimelineData> {
+    const cacheKey = `zone_timeline_${zoneKey}_${granularity}`;
+    const cached = clientCache.get<TimelineData>(cacheKey);
+    if (cached && Array.isArray(cached.points) && cached.points.length > 0) {
+      return cached;
+    }
+
+    try {
+      const res = await fetch(`${this.baseUrl}/timeline?zone=${encodeURIComponent(zoneKey)}&granularity=${encodeURIComponent(granularity)}`);
+      if (!res.ok) {
+        throw new Error(`Erreur HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      const result: TimelineData = {
+        zoneKey: data?.zoneKey || zoneKey,
+        granularity,
+        points: Array.isArray(data?.points) ? data.points : [],
+        isDemoFallback: Boolean(data?.isDemoFallback),
+      };
+      if (result.points.length > 0) {
+        clientCache.set(cacheKey, result, 15 * 60 * 1000);
+        return result;
+      }
+      throw new Error('Empty timeline points returned');
+    } catch {
+      const snapshot = EU_REFERENCE_SNAPSHOTS[zoneKey];
+      const points = generateReferenceTimeline(zoneKey, snapshot, snapshot?.datetime, granularity);
+      const result: TimelineData = {
+        zoneKey,
+        granularity,
+        points: Array.isArray(points) ? points : [],
+        isDemoFallback: true,
+      };
+      clientCache.set(cacheKey, result, 15 * 60 * 1000);
+      return result;
+    }
+  }
+
+  /**
+   * Récupère l'historique complet du mix électrique sur 24h
+   * (nucléaire, éolien, solaire, hydraulique, gaz, charbon, biomasse...)
+   */
+  async getZoneMixHistory(
+    zoneKey: string,
+    granularity: TemporalGranularity = '15_minutes'
+  ): Promise<MixHistoryData> {
+    const cacheKey = `zone_mix_history_${zoneKey}_${granularity}`;
+    const cached = clientCache.get<MixHistoryData>(cacheKey);
+    if (cached && Array.isArray(cached.points) && cached.points.length > 0) {
+      return cached;
+    }
+
+    try {
+      const res = await fetch(`${this.baseUrl}/mix-history?zone=${encodeURIComponent(zoneKey)}&granularity=${encodeURIComponent(granularity)}`);
+      if (!res.ok) {
+        throw new Error(`Erreur HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      const result: MixHistoryData = {
+        zoneKey: data?.zoneKey || zoneKey,
+        granularity,
+        points: Array.isArray(data?.points) ? data.points : [],
+        isDemoFallback: Boolean(data?.isDemoFallback),
+        timestamp: data?.timestamp,
+      };
+      if (result.points.length > 0) {
+        clientCache.set(cacheKey, result, 15 * 60 * 1000);
+        return result;
+      }
+      throw new Error('Empty mix points returned');
+    } catch {
+      const snapshot = EU_REFERENCE_SNAPSHOTS[zoneKey];
+      const points = generateReferenceMixHistory(zoneKey, snapshot, snapshot?.datetime, granularity);
+      const result: MixHistoryData = {
+        zoneKey,
+        granularity,
+        points: Array.isArray(points) ? points : [],
+        isDemoFallback: true,
+      };
+      clientCache.set(cacheKey, result, 15 * 60 * 1000);
+      return result;
     }
   }
 }

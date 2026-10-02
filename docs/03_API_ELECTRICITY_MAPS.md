@@ -16,16 +16,16 @@
 
 | Fonctionnalité | Version | Endpoint | Paramètres | Disponibilité API | Champs de Données Clés |
 |---|---|---|---|---|---|
-| **Intensité Carbone Instantanée** | V4 & V3 | `/v4/carbon-intensity/latest` ou `/v3/carbon-intensity/latest` | `zone` (ex: `FR`), `emissionFactorType` (ex: `lifecycle`) | Disponible (standard) | `zone`, `carbonIntensity`, `datetime`, `isEstimated`, `estimationMethod` |
-| **Historique Carbone (24h)** | V4 & V3 | `/v4/carbon-intensity/history` ou `/v3/carbon-intensity/history` | `zone` (ex: `FR`) | Disponible (standard) | `zone`, `history` [ { `carbonIntensity`, `datetime`, `isEstimated` } ] |
-| **Mix Électrique & Sources** | V4 | `/v4/electricity-mix/latest` | `zone`, `flowTraced` (`true`/`false`), `breakdownType` | V4 Standard | `nuclear`, `hydro`, `wind`, `solar`, `gas`, `coal`, `oil`, `biomass`, `geothermal` |
-| **Décomposition Électrique (Power Breakdown)** | V3 | `/v3/power-breakdown/latest` | `zone` | V3 Standard | `powerProductionBreakdown`, `powerProductionTotal`, `powerConsumptionBreakdown`, `powerConsumptionTotal`, `fossilFreePercentage`, `renewablePercentage` |
-| **Échanges & Flux Transfrontaliers** | V3/V4 | Fourni dans `power-breakdown/latest` (`powerImportBreakdown`, `powerExportBreakdown`) | `zone` | Standard | Dictionnaires `{ [zoneCode]: MW }` des imports et exports |
-| **Charge Totale (Total Load)** | V3/V4 | Fourni via `powerConsumptionTotal` dans breakdown | `zone` | Standard | Puissance totale consommée en MW |
-| **Charge Nette (Net Load)** | Calculé | Dérivé : `Total Load - (Solaire + Éolien)` | Client/Proxy | Standard | Grandeur calculée avec mention explicite |
-| **Liste des Zones Officielles** | V3/V4 | `/v3/zones` | Aucun | Public (sans auth) | Catalogue JSON des zones avec dénominations |
-| **Historique Étendu (> 24h)** | V4 | `/v4/carbon-intensity/past-range` | `zone`, `start`, `end` | Réservé Plans Payants | Non accessible sur plan gratuit standard |
-| **Prix Day-Ahead** | V4 | `/v4/price/latest` | `zone` | Réservé Plans Payants | Hors périmètre V0.1 |
+| **Intensité Carbone Instantanée** | V4 & V3 | `/v4/carbon-intensity/latest` | `zone` (ex: `FR`) | Disponible (standard) | `zone`, `carbonIntensity`, `datetime`, `isEstimated`, `estimationMethod` |
+| **Historique Carbone (24h)** | V4 & V3 | `/v4/carbon-intensity/history` | `zone`, `temporalResolution` (`15_minutes`, `5_minutes`, `hourly`) | Disponible (standard) | `zone`, `granularity`, `history` [ { `carbonIntensity`, `fossilOnlyCarbonIntensity`, `datetime` } ] |
+| **Timeline 24h Complète (10 signaux)** | V4 Proxy | `/api/electricity-maps/timeline` | `zone`, `granularity` (`15_minutes` défaut) | Intégration complète | `points` : carbone, renouvelable, bas-carbone, load, net load, solaire, éolien, nucléaire, flux |
+| **Mix Électrique & Sources** | V4 | `/v4/electricity-mix/latest` | `zone` | V4 Prioritaire | `mix` (`normal`, `flow-traced`, `storage`, `imports`, `exports`) |
+| **Historique du Mix Électrique (24h)** | V4 | `/v4/electricity-mix/history` | `zone`, `temporalResolution` (`15_minutes`, `5_minutes`, `hourly`) | V4 Prioritaire & Dédié | `history` [ { `datetime`, `mix`: { `production`: { `nuclear`, `wind`, `solar`, `hydro`, `gas`, `coal`, `biomass`... } } } ] |
+| **Flux Physiques Transfrontaliers** | V4 | `/v4/electricity-flows/latest` | `zone` | V4 Dédié | `imports`, `exports`, `importTotal`, `exportTotal`, `netExport` |
+| **Charge Réseau (Total Reported Load)** | V4 | `/v4/total-reported-load/latest` | `zone` | V4 Officiel | `value`, `totalReportedLoad` (donnée GRT) |
+| **Charge Nette (Net Load)** | V4 | `/v4/net-load/latest` | `zone` | V4 Officiel | `value`, `netLoad` officiel |
+| **Intensité Hors Renouvelable (Fossil-Only)** | V4 | `/v4/carbon-intensity-fossil-only/latest` | `zone` | V4 Officiel | `carbonIntensity` (empreinte thermique pure) |
+| **Niveaux Relatifs Qualitatifs** | V4 | `/v4/carbon-intensity-level/latest`, `/v4/carbon-free-percentage-level/latest`, `/v4/renewable-percentage-level/latest` | `zone` | V4 Officiel | `level` (`very-low`, `low`, `medium`, `high`, `very-high`) |
 
 ---
 
@@ -98,7 +98,24 @@
 
 ---
 
-## 4. Codes d'Erreurs & Stratégie de Résilience
+## 4. Page « Journée électrique » (Timeline 24h & 10 Signaux Physiques V4)
+
+L'application expose une vue temporelle continue modélisant l'intégralité des dimensions électriques sur 24 heures glissantes avec granularités V4 (`15_minutes` par défaut, `5_minutes` et `hourly`) :
+
+1. **Intensité carbone** (`carbonIntensity` - gCO₂eq/kWh) : empreinte ACV directe et indirecte du mix consommé.
+2. **Renouvelable** (`renewablePercentage` - %) : part combinée du solaire, de l'éolien, de l'hydraulique et de la biomasse.
+3. **Bas-carbone** (`fossilFreePercentage` - %) : électricité décarbonée sans émissions directes (renouvelable + nucléaire).
+4. **Total Load** (`totalLoad` - MW) : consommation brute totale appelée par le réseau.
+5. **Reported Load** (`totalReportedLoad` - MW) : charge officiellement télémesurée et déclarée par le gestionnaire de réseau (TSO / RTE / TenneT / Amprion).
+6. **Net Load** (`netLoad` - MW) : charge nette résiduelle (Total Load - Solaire - Éolien), visualisant la fameuse « Courbe du canard » (Duck Curve).
+7. **Solaire** (`solar` - MW) : profil en cloche diurne de l'énergie photovoltaïque.
+8. **Éolien** (`wind` - MW) : production éolienne terrestre et en mer.
+9. **Nucléaire** (`nuclear` - MW) : production continue du ruban de base (baseload).
+10. **Flux** (`netExport` - MW) : solde physique net des échanges transfrontaliers (+ exportateur, - importateur).
+
+---
+
+## 5. Codes d'Erreurs & Stratégie de Résilience
 
 - **401 Unauthorized / 403 Forbidden** : Clé API absente ou invalide. Le proxy répond avec code explicite et fournit le mode démonstration certifié avec badge clair.
 - **404 Not Found** : Zone non supportée ou sans données actives. L'application affiche "Zone non couverte ou donnée indisponible".

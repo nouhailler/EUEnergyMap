@@ -6,6 +6,7 @@ import {
   Minus,
   RefreshCw,
   Info,
+  Clock,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -16,12 +17,14 @@ import {
   CartesianGrid,
   Tooltip,
   ReferenceLine,
+  Legend,
 } from 'recharts';
-import { CarbonHistoryPoint, CountryElectricitySnapshot } from '../../types/energy';
+import { CarbonHistoryPoint, CountryElectricitySnapshot, TemporalGranularity, GRANULARITY_OPTIONS } from '../../types/energy';
 import { emapsClient } from '../../services/electricityMaps/client';
 
 interface CountryHistorySectionProps {
   snapshot: CountryElectricitySnapshot;
+  onNavigate?: (view: string, param?: string) => void;
 }
 
 interface ChartDataPoint {
@@ -29,13 +32,16 @@ interface ChartDataPoint {
   hourLabel: string;
   fullDateLabel: string;
   carbonIntensity: number;
+  fossilOnlyCarbonIntensity: number | null;
   isEstimated: boolean;
 }
 
-export const CountryHistorySection: React.FC<CountryHistorySectionProps> = ({ snapshot }) => {
+export const CountryHistorySection: React.FC<CountryHistorySectionProps> = ({ snapshot, onNavigate }) => {
   const [history, setHistory] = useState<CarbonHistoryPoint[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [granularity, setGranularity] = useState<TemporalGranularity>('15_minutes');
   const [showAverageLine, setShowAverageLine] = useState<boolean>(true);
+  const [historyMode, setHistoryMode] = useState<'total' | 'fossil' | 'compare'>('compare');
   const [error, setError] = useState<string | null>(null);
 
   const fetchHistory = async () => {
@@ -45,7 +51,8 @@ export const CountryHistorySection: React.FC<CountryHistorySectionProps> = ({ sn
       const data = await emapsClient.getZoneHistory(
         snapshot.zoneKey,
         snapshot.carbonIntensity ?? 150,
-        snapshot.datetime
+        snapshot.datetime,
+        granularity
       );
       setHistory(Array.isArray(data.history) ? data.history : []);
     } catch (err) {
@@ -58,7 +65,7 @@ export const CountryHistorySection: React.FC<CountryHistorySectionProps> = ({ sn
 
   useEffect(() => {
     fetchHistory();
-  }, [snapshot.zoneKey, snapshot.datetime, snapshot.carbonIntensity]);
+  }, [snapshot.zoneKey, snapshot.datetime, snapshot.carbonIntensity, granularity]);
 
   // Préparation et formatage des données pour Recharts
   const chartData: ChartDataPoint[] = useMemo(() => {
@@ -82,6 +89,7 @@ export const CountryHistorySection: React.FC<CountryHistorySectionProps> = ({ sn
           hourLabel,
           fullDateLabel,
           carbonIntensity: Math.round(pt.carbonIntensity as number),
+          fossilOnlyCarbonIntensity: pt.fossilOnlyCarbonIntensity != null ? Math.round(pt.fossilOnlyCarbonIntensity) : null,
           isEstimated: Boolean(pt.isEstimated),
         };
       });
@@ -108,6 +116,9 @@ export const CountryHistorySection: React.FC<CountryHistorySectionProps> = ({ sn
     const diff = lastVal - firstVal;
     const diffPercent = firstVal > 0 ? Math.round((diff / firstVal) * 100) : 0;
 
+    const fossilPoints = chartData.filter((d) => d.fossilOnlyCarbonIntensity != null).map((d) => d.fossilOnlyCarbonIntensity as number);
+    const fossilAvg = fossilPoints.length > 0 ? Math.round(fossilPoints.reduce((a, b) => a + b, 0) / fossilPoints.length) : null;
+
     return {
       average: avg,
       min: minPoint.carbonIntensity,
@@ -116,6 +127,7 @@ export const CountryHistorySection: React.FC<CountryHistorySectionProps> = ({ sn
       maxHour: maxPoint.hourLabel,
       diff,
       diffPercent,
+      fossilAverage: fossilAvg,
     };
   }, [chartData]);
 
@@ -140,12 +152,46 @@ export const CountryHistorySection: React.FC<CountryHistorySectionProps> = ({ sn
             </h2>
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Évolution heure par heure de l'empreinte carbone pour {snapshot.countryNameFr} ({snapshot.zoneKey})
+            Évolution de l'empreinte carbone pour {snapshot.countryNameFr} ({snapshot.zoneKey}) au pas de {granularity === '5_minutes' ? '5 minutes' : granularity === '15_minutes' ? '15 minutes' : '1 heure'}
           </p>
         </div>
 
         {/* Contrôles d'affichage */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Sélecteur de mode de série */}
+          <div className="inline-flex rounded-lg p-0.5 bg-slate-100 dark:bg-slate-700/80 text-xs">
+            <button
+              onClick={() => setHistoryMode('total')}
+              className={`px-2.5 py-1 rounded-md font-medium transition cursor-pointer ${
+                historyMode === 'total'
+                  ? 'bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+              }`}
+            >
+              Mix total
+            </button>
+            <button
+              onClick={() => setHistoryMode('fossil')}
+              className={`px-2.5 py-1 rounded-md font-medium transition cursor-pointer ${
+                historyMode === 'fossil'
+                  ? 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+              }`}
+            >
+              Fossile seul
+            </button>
+            <button
+              onClick={() => setHistoryMode('compare')}
+              className={`px-2.5 py-1 rounded-md font-medium transition cursor-pointer ${
+                historyMode === 'compare'
+                  ? 'bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 shadow-xs font-semibold'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+              }`}
+            >
+              Comparaison (2 courbes)
+            </button>
+          </div>
+
           <button
             onClick={() => setShowAverageLine((prev) => !prev)}
             className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition cursor-pointer ${
@@ -154,7 +200,22 @@ export const CountryHistorySection: React.FC<CountryHistorySectionProps> = ({ sn
                 : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
             }`}
           >
-            Ligne moyenne (24h)
+            Ligne moyenne
+          </button>
+
+          <button
+            onClick={() => {
+              if (onNavigate) {
+                onNavigate('timeline', snapshot.zoneKey || snapshot.countryCode);
+              } else {
+                window.location.hash = 'timeline';
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-lg border border-sky-300 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/60 text-xs font-bold text-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-900 transition cursor-pointer shadow-xs"
+            title="Ouvrir la Journée électrique complète avec les 10 signaux physiques V4 pour ce pays"
+          >
+            <TrendingUp className="w-3.5 h-3.5" />
+            <span>📈 Journée électrique</span>
           </button>
 
           <button
@@ -169,41 +230,106 @@ export const CountryHistorySection: React.FC<CountryHistorySectionProps> = ({ sn
         </div>
       </div>
 
+      {/* Barre de sélection de la Granularité Temporelle V4 */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800">
+        <div className="flex items-center gap-2.5">
+          <Clock className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+          <div>
+            <div className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <span>Granularité temporelle V4</span>
+              <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 font-mono">
+                {chartData.length} points
+              </span>
+            </div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">
+              Résolution native fournie par l'API Electricity Maps / ENTSO-E
+            </div>
+          </div>
+        </div>
+
+        {/* Sélecteur radio / boutons 5 min / 15 min (défaut) / 1 heure */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {GRANULARITY_OPTIONS.map((opt) => {
+            const isSelected = granularity === opt.value;
+            return (
+              <button
+                key={opt.value}
+                onClick={() => setGranularity(opt.value)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                  isSelected
+                    ? 'bg-sky-600 text-white shadow-xs'
+                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                }`}
+                title={opt.description}
+              >
+                <span className={`w-2.5 h-2.5 rounded-full flex items-center justify-center border ${
+                  isSelected ? 'border-white bg-white' : 'border-slate-400'
+                }`}>
+                  {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-sky-600" />}
+                </span>
+                <span>{opt.label}</span>
+                {opt.value === '15_minutes' && (
+                  <span className={`text-[9px] px-1 py-0.2 rounded font-bold uppercase tracking-wider ${
+                    isSelected ? 'bg-sky-700 text-sky-100' : 'bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300'
+                  }`}>
+                    Défaut
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Cartes de statistiques rapides 24h */}
       {stats && !isLoading && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800">
-            <span className="text-[11px] text-slate-500 dark:text-slate-400 block">Moyenne 24h</span>
+            <span className="text-[11px] text-slate-500 dark:text-slate-400 block">Mix total (Moyenne 24h)</span>
             <div className="mt-1 flex items-baseline gap-1">
-              <span className="text-lg font-bold font-mono text-slate-900 dark:text-white">
+              <span className="text-lg font-bold font-mono text-rose-600 dark:text-rose-400">
                 {stats.average}
               </span>
               <span className="text-[10px] text-slate-400">gCO₂/kWh</span>
             </div>
+            <span className="text-[10px] text-slate-400 block mt-0.5">Ensemble du mix</span>
           </div>
 
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800">
-            <span className="text-[11px] text-slate-500 dark:text-slate-400 block">Minimum (24h)</span>
+            <span className="text-[11px] text-slate-500 dark:text-slate-400 block">Fossile seul (Moyenne 24h)</span>
             <div className="mt-1 flex items-baseline gap-1">
-              <span className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                {stats.min}
-              </span>
-              <span className="text-[10px] text-slate-400">g à {stats.minHour}</span>
+              {stats.fossilAverage != null ? (
+                <>
+                  <span className="text-lg font-bold font-mono text-amber-600 dark:text-amber-400">
+                    {stats.fossilAverage}
+                  </span>
+                  <span className="text-[10px] text-slate-400">gCO₂/kWh</span>
+                </>
+              ) : (
+                <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+                  0 g (100% décarboné)
+                </span>
+              )}
             </div>
+            <span className="text-[10px] text-slate-400 block mt-0.5">Thermique actif</span>
           </div>
 
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800">
-            <span className="text-[11px] text-slate-500 dark:text-slate-400 block">Maximum (24h)</span>
+            <span className="text-[11px] text-slate-500 dark:text-slate-400 block">Extrêmes Mix (24h)</span>
             <div className="mt-1 flex items-baseline gap-1">
-              <span className="text-lg font-bold font-mono text-rose-600 dark:text-rose-400">
-                {stats.max}
+              <span className="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                {stats.min} g
               </span>
-              <span className="text-[10px] text-slate-400">g à {stats.maxHour}</span>
+              <span className="text-[10px] text-slate-400">/</span>
+              <span className="text-base font-bold font-mono text-rose-600 dark:text-rose-400">
+                {stats.max} g
+              </span>
             </div>
+            <span className="text-[10px] text-slate-400 block mt-0.5">Min à {stats.minHour} • Max à {stats.maxHour}</span>
           </div>
 
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800">
-            <span className="text-[11px] text-slate-500 dark:text-slate-400 block">Variation sur 24h</span>
+            <span className="text-[11px] text-slate-500 dark:text-slate-400 block">Variation Mix sur 24h</span>
             <div className="mt-1 flex items-center gap-1.5">
               {stats.diff < 0 ? (
                 <>
@@ -228,6 +354,7 @@ export const CountryHistorySection: React.FC<CountryHistorySectionProps> = ({ sn
                 </>
               )}
             </div>
+            <span className="text-[10px] text-slate-400 block mt-0.5">Tendance court terme</span>
           </div>
         </div>
       )}
@@ -293,26 +420,38 @@ export const CountryHistorySection: React.FC<CountryHistorySectionProps> = ({ sn
                     const diffAvg = stats ? item.carbonIntensity - stats.average : 0;
 
                     return (
-                      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 rounded-xl shadow-lg text-xs space-y-1.5 z-50">
+                      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 rounded-xl shadow-lg text-xs space-y-2 z-50">
                         <p className="font-semibold text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800 pb-1">
                           {item.fullDateLabel}
                         </p>
-                        <div className="flex items-center justify-between gap-3">
+
+                        {/* Intensité totale mix */}
+                        <div className="flex items-center justify-between gap-4">
                           <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                            <span
-                              className="w-2.5 h-2.5 rounded-full inline-block"
-                              style={{ backgroundColor: lineColor }}
-                            />
-                            Intensité :
+                            <span className="w-2.5 h-2.5 rounded-full inline-block bg-rose-500 shrink-0" />
+                            <span>Mix total :</span>
                           </span>
                           <span className="font-bold font-mono text-slate-900 dark:text-white">
                             {item.carbonIntensity} gCO₂/kWh
                           </span>
                         </div>
 
+                        {/* Intensité fossile seule */}
+                        {item.fossilOnlyCarbonIntensity != null && (
+                          <div className="flex items-center justify-between gap-4">
+                            <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                              <span className="w-2.5 h-2.5 rounded-full inline-block bg-amber-500 shrink-0" />
+                              <span>Fossile seul :</span>
+                            </span>
+                            <span className="font-bold font-mono text-amber-600 dark:text-amber-400">
+                              {item.fossilOnlyCarbonIntensity} gCO₂/kWh
+                            </span>
+                          </div>
+                        )}
+
                         {stats && (
-                          <div className="flex items-center justify-between gap-3 text-[11px] text-slate-400">
-                            <span>Écart à la moyenne :</span>
+                          <div className="flex items-center justify-between gap-3 text-[11px] text-slate-400 pt-0.5 border-t border-slate-100 dark:border-slate-800">
+                            <span>Écart moy. mix :</span>
                             <span
                               className={`font-mono font-medium ${
                                 diffAvg <= 0 ? 'text-emerald-500' : 'text-amber-500'
@@ -323,23 +462,30 @@ export const CountryHistorySection: React.FC<CountryHistorySectionProps> = ({ sn
                           </div>
                         )}
 
-                        <div className="text-[10px] text-slate-400 pt-0.5 border-t border-slate-100 dark:border-slate-800">
-                          {item.isEstimated ? 'Modélisé (estimé)' : 'Mesure vérifiée'}
+                        <div className="text-[10px] text-slate-400 pt-0.5">
+                          {item.isEstimated ? 'Données modélisées' : 'Relevés officiels Electricity Maps V4'}
                         </div>
                       </div>
                     );
                   }}
                 />
 
-                {showAverageLine && stats && (
+                <Legend
+                  verticalAlign="top"
+                  height={32}
+                  iconType="circle"
+                  wrapperStyle={{ fontSize: 11, paddingBottom: 6 }}
+                />
+
+                {showAverageLine && stats && (historyMode === 'total' || historyMode === 'compare') && (
                   <ReferenceLine
                     y={stats.average}
-                    stroke="#0284c7"
+                    stroke="#e11d48"
                     strokeDasharray="4 4"
                     strokeWidth={1.5}
                     label={{
-                      value: `Moy. 24h (${stats.average} g)`,
-                      fill: '#0284c7',
+                      value: `Moy. Mix (${stats.average} g)`,
+                      fill: '#e11d48',
                       position: 'top',
                       fontSize: 10,
                       fontWeight: 600,
@@ -347,21 +493,42 @@ export const CountryHistorySection: React.FC<CountryHistorySectionProps> = ({ sn
                   />
                 )}
 
-                <Line
-                  type="monotone"
-                  dataKey="carbonIntensity"
-                  name="Intensité carbone"
-                  stroke={lineColor}
-                  strokeWidth={2.5}
-                  dot={{ r: 2, fill: lineColor, strokeWidth: 0 }}
-                  activeDot={{
-                    r: 5,
-                    fill: lineColor,
-                    stroke: '#ffffff',
-                    strokeWidth: 2,
-                  }}
-                  isAnimationActive={true}
-                />
+                {(historyMode === 'total' || historyMode === 'compare') && (
+                  <Line
+                    type="monotone"
+                    dataKey="carbonIntensity"
+                    name="Intensité carbone (mix total)"
+                    stroke="#e11d48"
+                    strokeWidth={2.5}
+                    dot={{ r: 2, fill: '#e11d48', strokeWidth: 0 }}
+                    activeDot={{
+                      r: 5,
+                      fill: '#e11d48',
+                      stroke: '#ffffff',
+                      strokeWidth: 2,
+                    }}
+                    isAnimationActive={true}
+                  />
+                )}
+
+                {(historyMode === 'fossil' || historyMode === 'compare') && (
+                  <Line
+                    type="monotone"
+                    dataKey="fossilOnlyCarbonIntensity"
+                    name="Intensité carbone fossile"
+                    stroke="#d97706"
+                    strokeWidth={2.5}
+                    strokeDasharray={historyMode === 'compare' ? '5 5' : undefined}
+                    dot={{ r: 2, fill: '#d97706', strokeWidth: 0 }}
+                    activeDot={{
+                      r: 5,
+                      fill: '#d97706',
+                      stroke: '#ffffff',
+                      strokeWidth: 2,
+                    }}
+                    isAnimationActive={true}
+                  />
+                )}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -369,11 +536,22 @@ export const CountryHistorySection: React.FC<CountryHistorySectionProps> = ({ sn
       </div>
 
       {/* Note contextuelle et pédagogique */}
-      <div className="flex items-start gap-2 text-xs text-slate-500 dark:text-slate-400 pt-1">
+      <div className="flex items-start gap-2.5 text-xs text-slate-600 dark:text-slate-300 pt-1 bg-slate-50 dark:bg-slate-900/40 p-3.5 rounded-xl border border-slate-100 dark:border-slate-800">
         <Info className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
-        <p className="leading-relaxed">
-          Les fluctuations observées sur 24 heures reflètent l'alternance jour/nuit (production solaire de mi-journée), le profil des vents, ainsi que les pointes de consommation du matin (07h-09h) et du soir (18h-21h) mobilisant des unités d'appoint.
-        </p>
+        <div className="space-y-1">
+          <p className="leading-relaxed">
+            <strong>Intensité carbone totale : ensemble du mix.</strong> Relevée via <code className="text-[10px] bg-slate-200 dark:bg-slate-800 px-1 py-0.5 rounded font-mono">/v4/carbon-intensity/latest</code> &amp; <code className="text-[10px] bg-slate-200 dark:bg-slate-800 px-1 py-0.5 rounded font-mono">/history</code>.
+          </p>
+          <p className="leading-relaxed">
+            <strong>Intensité carbone fossile : uniquement la production fossile.</strong> Relevée via <code className="text-[10px] bg-slate-200 dark:bg-slate-800 px-1 py-0.5 rounded font-mono">/v4/carbon-intensity-fossil-only/latest</code> &amp; <code className="text-[10px] bg-slate-200 dark:bg-slate-800 px-1 py-0.5 rounded font-mono">/history</code>.
+          </p>
+          <p className="leading-relaxed">
+            <strong>Disponibilité de la granularité temporelle :</strong> Le pas <strong>15 minutes</strong> (96 points/24h) constitue la référence officielle du marché synchrone européen (règlement européen CACM / ENTSO-E). Le pas <strong>5 minutes</strong> (288 points/24h) est accessible sur les zones à forte dynamique ou télémesures temps réel, tandis que le pas <strong>1 heure</strong> (24 points) correspond aux séries historiques Day-Ahead.
+          </p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 pt-0.5">
+            L'écart visuel entre les deux courbes illustre l'effet de dilution permis par la production décarbonée (nucléaire et renouvelables).
+          </p>
+        </div>
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ import {
   RotateCw,
   Globe2,
   Menu,
+  TrendingUp,
 } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
 import { HamburgerMenu } from './HamburgerMenu';
@@ -41,6 +42,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const navLinks = [
     { id: 'dashboard', label: 'Europe & Carte', icon: Globe2 },
+    { id: 'timeline', label: '📈 Journée électrique', icon: TrendingUp },
     { id: 'compare', label: 'Comparer', icon: Layers },
     { id: 'carbon', label: 'Carbone', icon: Flame },
     { id: 'renewables', label: 'Renouvelables', icon: Leaf },

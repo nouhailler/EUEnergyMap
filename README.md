@@ -91,13 +91,20 @@ src/
 
 ---
 
-## 4. Endpoints Utilisés (Electricity Maps API)
+## 4. Endpoints Utilisés (Electricity Maps API V4)
 
-Conformément à la documentation officielle Electricity Maps :
+Le backend Express interroge désormais **100 % de l'API en V4** avec une cascade de résilience :
 
+- `GET /v4/electricity-mix/latest?zone=XX` : Mix de production (`normal`), mix de consommation *flow-traced*, stockage, imports et exports (avec repli automatique sur `/v4/power-breakdown/latest` puis `/v3/power-breakdown/latest` si le plan de clé ne supporte pas encore le signal).
+- `GET /v4/electricity-flows/latest?zone=XX` : Flux physiques et interconnexions transfrontalières.
 - `GET /v4/carbon-intensity/latest?zone=XX` : Intensité carbone instantanée en cycle de vie (`gCO₂eq/kWh`).
-- `GET /v4/carbon-intensity/history?zone=XX` : Relevés horaires des 24 dernières heures.
-- `GET /v4/electricity-mix/latest?zone=XX` ou `GET /v3/power-breakdown/latest?zone=XX` : Décomposition par filière (MW), charges (`powerConsumptionTotal`), imports et exports.
+- `GET /v4/carbon-intensity/history?zone=XX&temporalResolution=15_minutes` : Relevés glissants sur 24 heures avec support des granularités V4 (`15_minutes` par défaut — 96 points, `5_minutes` — 288 points, et `hourly` — 24 points).
+- `GET /v4/carbon-intensity-fossil-only/latest?zone=XX` : Intensité carbone des seules filières thermiques fossiles.
+- `GET /v4/carbon-intensity-level/latest?zone=XX` : Palier qualitatif d'intensité carbone officiel calculé par rapport à l'historique récent de la zone.
+- `GET /v4/carbon-free-percentage-level/latest?zone=XX` : Palier qualitatif d'énergie décarbonée officiel.
+- `GET /v4/renewable-percentage-level/latest?zone=XX` : Palier qualitatif d'énergie renouvelable officiel.
+- `GET /v4/total-reported-load/latest?zone=XX` : Charge totale déclarée par les gestionnaires de réseau (TSO / RTE / ENTSO-E).
+- `GET /v4/net-load/latest?zone=XX` : Charge résiduelle nette officielle intégrant stockage et échanges.
 
 ---
 
