@@ -126,7 +126,7 @@ export const CountryMixHistorySection: React.FC<CountryMixHistorySectionProps> =
   const [granularity, setGranularity] = useState<TemporalGranularity>('15_minutes');
   const [points, setPoints] = useState<MixHistoryPoint[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [viewMode, setViewMode] = useState<'stacked' | 'lines' | 'percentage'>('stacked');
+  const [viewMode, setViewMode] = useState<'stacked' | 'lines' | 'percentage' | 'ribbons'>('stacked');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [visibleSources, setVisibleSources] = useState<Record<string, boolean>>({
     nuclear: true,
@@ -286,6 +286,75 @@ export const CountryMixHistorySection: React.FC<CountryMixHistorySectionProps> =
     };
   }, [points, activeSources]);
 
+  // Timeline des rubans physiques : échantillonnage 00h, 06h, 12h, 18h, 24h
+  const ribbonTimeline = useMemo(() => {
+    if (!points.length) return null;
+    const targetHours = [0, 6, 12, 18, 24];
+
+    const sampled = targetHours.map((th) => {
+      let closestPt = points[0];
+      let minDiff = 999999;
+      points.forEach((pt) => {
+        const d = new Date(pt.datetime);
+        const h = d.getUTCHours() + d.getUTCMinutes() / 60;
+        const target = th === 24 ? 24 : th;
+        const diff = Math.abs(h - target);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestPt = pt;
+        }
+      });
+      return {
+        hourNum: th,
+        hourLabel: `${th.toString().padStart(2, '0')}h`,
+        pt: closestPt,
+      };
+    });
+
+    const sourceRows = activeSources.map((s) => {
+      const valuesGW = sampled.map(({ pt }) => {
+        const valMW = pt ? ((pt as any)[s.key] || 0) : 0;
+        return {
+          gwStr: (valMW / 1000).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' GW',
+          mw: valMW,
+        };
+      });
+
+      const maxVal = Math.max(1, ...points.map((p) => (p as any)[s.key] || 0));
+      const pathPoints = points.map((p, idx) => {
+        const x = (idx / (points.length - 1)) * 100;
+        const val = (p as any)[s.key] || 0;
+        const y = 24 - (val / maxVal) * 20;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      });
+      const svgPath = `M ${pathPoints.join(' L ')}`;
+
+      let asciiShape = '───────────────────────────────';
+      if (s.key === 'solar') {
+        asciiShape = '      ╭────────╮      ';
+      } else if (s.key === 'wind') {
+        asciiShape = '  ╭──────────╮  ';
+      } else if (s.key === 'gas' || s.key === 'oil') {
+        asciiShape = '  ╭──╮      ╭──╮  ';
+      } else if (s.key === 'hydro') {
+        asciiShape = '  ╭─────────────╮  ';
+      }
+
+      return {
+        source: s,
+        valuesGW,
+        svgPath,
+        asciiShape,
+        maxGW: (maxVal / 1000).toFixed(1),
+      };
+    });
+
+    return {
+      sampledHours: sampled.map((s) => s.hourLabel),
+      sourceRows,
+    };
+  }, [points, activeSources]);
+
   return (
     <div className="bg-white dark:bg-slate-800/90 p-5 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-xs space-y-5">
       {/* En-tête de section */}
@@ -333,8 +402,19 @@ export const CountryMixHistorySection: React.FC<CountryMixHistorySectionProps> =
             </div>
           </div>
 
-          {/* Bascule Mode de Graphique : Empilé / Lignes / Pourcentages */}
+          {/* Bascule Mode de Graphique : Rubans 24h / Empilé / Lignes / Pourcentages */}
           <div className="inline-flex rounded-xl p-1 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
+            <button
+              onClick={() => setViewMode('ribbons')}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer flex items-center gap-1 ${
+                viewMode === 'ribbons'
+                  ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+              title="Rubans physiques 24h (00h -> 24h) par filière"
+            >
+              <span>Rubans 24h ───</span>
+            </button>
             <button
               onClick={() => setViewMode('stacked')}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer ${
@@ -381,54 +461,99 @@ export const CountryMixHistorySection: React.FC<CountryMixHistorySectionProps> =
         </div>
       </div>
 
-      {/* Résumé schématique horizontal conforme à la vision de l'utilisateur :
-          00h -> 06h -> 12h -> 18h -> 24h avec profils physiques */}
-      <div className="p-3.5 rounded-xl bg-slate-50/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-700/80 space-y-2">
-        <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 dark:text-slate-400 border-b border-slate-200/60 dark:border-slate-800 pb-1.5">
-          <span className="font-bold text-slate-700 dark:text-slate-300">
-            {snapshot.flagEmoji} {snapshot.countryNameFr} : Profils physiques observés
-          </span>
-          <span className="hidden sm:inline">Timeline 24h : 00h ──────── 06h ──────── 12h ──────── 18h ──────── 24h</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-white dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/60">
-            <span className="text-base shrink-0">☢️</span>
-            <div className="min-w-0">
-              <div className="font-bold text-indigo-600 dark:text-indigo-400 text-[11px] truncate">
-                Nucléaire ─── ruban stable
-              </div>
-              <p className="text-[10px] text-slate-400 truncate">
-                Socle de production continue (base continuous)
-              </p>
-            </div>
+      {/* RÉSULTAT SCHÉMATIQUE TEMPOREL CONFORME À LA VISION UTILISATEUR :
+          🇫🇷 France
+          00h        06h        12h        18h        24h
+          ☢️ nucléaire ───────────────────────────────
+          💨 éolien       ╭──────────╮
+          ☀️ solaire             ╭────────╮
+      */}
+      {points.length === 0 ? (
+        <div className="p-6 rounded-2xl bg-slate-50/80 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-center space-y-3">
+          <div className="inline-flex p-3 rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400">
+            <Clock className="w-6 h-6" />
           </div>
-
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-white dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/60">
-            <span className="text-base shrink-0">💨</span>
-            <div className="min-w-0">
-              <div className="font-bold text-emerald-600 dark:text-emerald-400 text-[11px] truncate">
-                Éolien ╭───╮ météorologique
-              </div>
-              <p className="text-[10px] text-slate-400 truncate">
-                Variations diurnes et passages dépressionnaires
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-white dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/60">
-            <span className="text-base shrink-0">☀️</span>
-            <div className="min-w-0">
-              <div className="font-bold text-amber-500 dark:text-amber-400 text-[11px] truncate">
-                Solaire ╭───╮ cloche de midi
-              </div>
-              <p className="text-[10px] text-slate-400 truncate">
-                Nul la nuit, pic entre 12h et 14h locale
-              </p>
-            </div>
+          <div>
+            <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+              Historique du mix 24h indisponible
+            </h4>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-lg mx-auto">
+              Conformément à la règle <strong>« Zéro donnée inventée »</strong>, aucune courbe artificielle n'est simulée. Seule la décomposition réelle certifiée du mix de production instantané est affichée.
+            </p>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="p-4 rounded-xl bg-slate-50/90 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-700/80 space-y-3 font-mono">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 dark:border-slate-800 pb-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">{snapshot.flagEmoji}</span>
+              <span className="font-bold text-sm text-slate-900 dark:text-white">
+                {snapshot.countryNameFr} : Profils physiques 24h (API V4 /v4/electricity-mix/history)
+              </span>
+            </div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-3">
+              <span className="hidden sm:inline font-bold text-indigo-600 dark:text-indigo-400">Chronologie :</span>
+              <span>00h ──────── 06h ──────── 12h ──────── 18h ──────── 24h</span>
+            </div>
+          </div>
+
+          {/* Liste des rubans par filière */}
+          <div className="space-y-2 pt-1 overflow-x-auto">
+            {ribbonTimeline?.sourceRows.map(({ source, valuesGW, svgPath, asciiShape, maxGW }) => (
+              <div
+                key={source.key}
+                className="p-2.5 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200/70 dark:border-slate-700/70 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs shadow-2xs hover:border-indigo-400 dark:hover:border-indigo-500 transition"
+              >
+                {/* Entête filière */}
+                <div className="w-40 shrink-0 flex items-center gap-2">
+                  <span className="text-lg shrink-0">{source.emoji}</span>
+                  <div className="min-w-0">
+                    <div className="font-bold text-slate-900 dark:text-white truncate">
+                      {source.label}
+                    </div>
+                    <div className="text-[10px] text-slate-400 truncate">
+                      Pic: {maxGW} GW
+                    </div>
+                  </div>
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0 ml-auto"
+                    style={{ backgroundColor: source.color }}
+                  />
+                </div>
+
+                {/* Ruban / Visualisation continue de la forme */}
+                <div className="flex-1 min-w-[260px] max-w-xl flex flex-col justify-center px-2">
+                  <div className="h-6 w-full relative flex items-center">
+                    <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 24">
+                      <path
+                        d={svgPath}
+                        fill="none"
+                        stroke={source.color}
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-mono tracking-tighter truncate text-center select-all mt-0.5">
+                    {asciiShape}
+                  </div>
+                </div>
+
+                {/* Valeurs numériques aux 5 jalons 00h -> 24h */}
+                <div className="flex items-center gap-2 sm:gap-3 shrink-0 text-[11px] text-right">
+                  {valuesGW.map((v, idx) => (
+                    <div key={idx} className="w-14 sm:w-16">
+                      <div className="text-[9px] text-slate-400 font-mono">{ribbonTimeline.sampledHours[idx]}</div>
+                      <div className="font-bold text-slate-900 dark:text-white font-mono text-[11px]">{v.gwStr}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Barre de filtres par filière (clic pour afficher/masquer ou double-clic pour isoler) */}
       <div className="flex items-center gap-1.5 flex-wrap pt-1">
@@ -473,7 +598,7 @@ export const CountryMixHistorySection: React.FC<CountryMixHistorySectionProps> =
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%" minWidth={300} minHeight={280}>
-            {viewMode === 'stacked' ? (
+            {viewMode === 'stacked' || viewMode === 'ribbons' ? (
               <AreaChart
                 data={chartData}
                 margin={{ top: 16, right: 16, left: 0, bottom: 4 }}

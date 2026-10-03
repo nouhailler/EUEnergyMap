@@ -74,11 +74,21 @@ export const FlowsMap: React.FC<FlowsMapProps> = ({
     map.fitBounds(europeBounds, { padding: [20, 20] });
     L.control.zoom({ position: 'topleft' }).addTo(map);
 
-    // Fond de carte sombre et moderne CARTO Dark All (via proxy sécurisé)
+    // Fond de carte sombre et moderne CARTO Dark All (via proxy sécurisé avec fallback automatique OpenStreetMap)
     const tileLayer = L.tileLayer('/api/carto/tiles/dark_all/{z}/{x}/{y}.png', {
       subdomains: 'abc',
       maxZoom: 18,
       opacity: 0.95,
+    });
+    tileLayer.on('tileerror', (errorEvent: any) => {
+      if (errorEvent?.tile && !errorEvent.tile.dataset?.fallbackTried) {
+        errorEvent.tile.dataset = errorEvent.tile.dataset || {};
+        errorEvent.tile.dataset.fallbackTried = 'true';
+        const coords = errorEvent.coords;
+        if (coords) {
+          errorEvent.tile.src = `https://tile.openstreetmap.org/${coords.z}/${coords.x}/${coords.y}.png`;
+        }
+      }
     });
     tileLayer.addTo(map);
 

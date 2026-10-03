@@ -19,10 +19,10 @@ L'application ne cherche pas à reproduire l'interface commerciale d'Electricity
 
 ## 1. Principes Absolus & Règle d'Or des Données
 
-1. **Aucune donnée inventée** : Si une information n'est pas transmise par l'API, elle est affichée comme `Donnée indisponible` ou `—`. Elle n'est **JAMAIS** convertie artificiellement en `0`.
+1. **Aucune donnée inventée, zéro courbe synthétique** : Si une information n'est pas transmise par l'API, elle est affichée comme `Donnée indisponible` ou `Donnée historique indisponible`. L'application **refuse expressément de fabriquer ou simuler des courbes temporelles artificielles** (fonctions sinus ou modèles inventés). Seule la dernière observation réelle certifiée est restituée.
 2. **Distinction entre zéro et valeur absente** : `0 MW` indique une mesure réelle d'absence de production (ex: solaire de nuit) ; `null` indique une indisponibilité de mesure.
 3. **Traçabilité des estimations** : Tout chiffre issu d'un modèle d'apprentissage ou d'une estimation porte le badge distinctif `<DataQualityBadge status="estimated" />`.
-4. **Pas de clé API dans le frontend** : La clé secrète Electricity Maps n'est jamais injectée dans le code client. Toutes les requêtes transitent par un proxy serveur Express sécurisé.
+4. **Pas de clé API dans le frontend** : La clé secrète Electricity Maps et la clé CARTO Basemaps ne sont jamais injectées dans le code client. Toutes les requêtes transitent par un proxy serveur Express sécurisé (`/api/electricity-maps/*` et `/api/carto/tiles/*`).
 5. **Neutralité factuelle** : L'outil ne propose aucun classement "meilleur/pire", aucun "gagnant/perdant" ni score global arbitraire.
 
 ---
@@ -125,9 +125,15 @@ Créez un fichier `.env` à la racine (ou configurez vos variables serveur) :
 # Token d'authentification pour l'API Electricity Maps (v3/v4)
 # Utilisé côté serveur uniquement — ne jamais préfixer par VITE_
 ELECTRICITY_MAPS_API_KEY="votre_cle_api_secrete"
+
+# Clé API pour le service de tuiles cartographiques CARTO Basemaps (Positron & Dark Matter)
+# Fallback automatique transparent vers OpenStreetMap (OSM) en cas d'erreur ou indisponibilité
+CARTO_API_KEY="cb1_401f_1_81e88d5ab80e13c7924b8b1d"
 ```
 
-> **Note de résilience :** Si aucune clé API n'est renseignée ou si le quota est dépassé (HTTP 429), le serveur bascule automatiquement sur un instantané de référence factuel certifié et l'affiche loyalement avec le badge "Réf. Factuelle".
+> **Note de probité & résilience :**
+> - Si l'API Electricity Maps n'a pas de données historiques pour une zone, l'application applique la règle stricte **« Zéro donnée inventée »** : elle n'invente **JAMAIS** de courbe par fonction sinus ou simulation synthétique, et affiche explicitement `Donnée historique indisponible` avec la dernière observation certifiée.
+> - Pour les fonds cartographiques, le serveur interroge CARTO Basemaps avec la clé fournie et bascule instantanément sur OpenStreetMap si le service est injoignable ou en cas de quota épuisé.
 
 ### 3. Lancer en développement
 ```bash

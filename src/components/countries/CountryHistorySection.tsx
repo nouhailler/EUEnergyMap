@@ -377,8 +377,24 @@ export const CountryHistorySection: React.FC<CountryHistorySectionProps> = ({ sn
             </button>
           </div>
         ) : chartData.length === 0 ? (
-          <div className="h-48 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-xs text-slate-400 italic">
-            Aucun historique 24h disponible pour cette zone.
+          <div className="p-6 rounded-2xl bg-slate-50/80 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-center space-y-3">
+            <div className="inline-flex p-3 rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400">
+              <Clock className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                Donnée historique 24h indisponible
+              </h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-lg mx-auto">
+                Conformément à la règle <strong>« Zéro donnée inventée »</strong>, aucune courbe artificielle n'est simulée par fonction mathématique. Seule la dernière observation certifiée réellement connue est affichée.
+              </p>
+            </div>
+            {snapshot.carbonIntensity !== null && (
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono">
+                <span className="text-slate-400">Dernier relevé certifié :</span>
+                <span className="font-bold text-slate-900 dark:text-white">{snapshot.carbonIntensity} gCO₂eq/kWh</span>
+              </div>
+            )}
           </div>
         ) : (
           <div className="h-72 w-full pt-2">

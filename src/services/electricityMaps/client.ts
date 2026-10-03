@@ -1,6 +1,6 @@
-import { CountryElectricitySnapshot, CountryHistoryData, CarbonHistoryPoint, TemporalGranularity, TimelineData, TimelineHistoryPoint, MixHistoryData } from '../../types/energy';
+import { CountryElectricitySnapshot, CountryHistoryData, CarbonHistoryPoint, TemporalGranularity, TimelineData, TimelineHistoryPoint, MixHistoryData, FlowsHistoryData } from '../../types/energy';
 import { clientCache } from './cache';
-import { EU_REFERENCE_SNAPSHOTS, generateReferenceHistory, generateReferenceTimeline, generateReferenceMixHistory } from '../../data/referenceData';
+import { EU_REFERENCE_SNAPSHOTS, getLastKnownObservation } from '../../data/referenceData';
 
 const IN_FLIGHT_PROMISES = new Map<string, Promise<unknown>>();
 
@@ -155,6 +155,7 @@ export class ElectricityMapsClient {
   /**
    * Récupère l'historique 24h d'une zone avec support des granularités V4
    * ('15_minutes' par défaut, '5_minutes', 'hourly')
+   * Règle stricte « Zéro donnée inventée » : Aucune courbe artificielle générée par sinus.
    */
   async getZoneHistory(
     zoneKey: string,
@@ -164,42 +165,58 @@ export class ElectricityMapsClient {
   ): Promise<CountryHistoryData> {
     const cacheKey = `zone_history_${zoneKey}_${granularity}`;
     const cached = clientCache.get<CountryHistoryData>(cacheKey);
-    if (cached && Array.isArray(cached.history) && cached.history.length > 0) return cached;
+    if (cached) return cached;
 
     try {
       const res = await fetch(`${this.baseUrl}/history?zone=${encodeURIComponent(zoneKey)}&granularity=${encodeURIComponent(granularity)}`);
-      if (!res.ok) {
-        throw new Error(`Erreur HTTP ${res.status}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.history) && data.history.length > 0) {
+          const result: CountryHistoryData = {
+            zoneKey: data.zoneKey || zoneKey,
+            granularity,
+            history: data.history,
+            isDemoFallback: Boolean(data.isDemoFallback),
+          };
+          clientCache.set(cacheKey, result, 15 * 60 * 1000);
+          return result;
+        }
+        if (data && data.isUnavailable) {
+          const result: CountryHistoryData = {
+            zoneKey: data.zoneKey || zoneKey,
+            granularity,
+            history: [],
+            isUnavailable: true,
+            message: data.message || "Donnée historique indisponible (aucune courbe synthétique n'est générée)",
+            lastKnown: data.lastKnown,
+          };
+          clientCache.set(cacheKey, result, 15 * 60 * 1000);
+          return result;
+        }
       }
-      const data: ZoneHistoryResponse = await res.json();
-      const result: CountryHistoryData = {
-        zoneKey: data?.zoneKey || zoneKey,
-        granularity,
-        history: Array.isArray(data?.history) ? data.history : [],
-      };
-      if (result.history.length > 0) {
-        clientCache.set(cacheKey, result, 15 * 60 * 1000);
-        return result;
-      }
-      throw new Error('Empty history returned');
     } catch {
-      const snapshot = EU_REFERENCE_SNAPSHOTS[zoneKey];
-      const baseIntensity = fallbackIntensity ?? snapshot?.carbonIntensity ?? 150;
-      const baseFossil = snapshot?.fossilOnlyCarbonIntensity ?? null;
-      const history = generateReferenceHistory(zoneKey, baseIntensity, referenceDate || snapshot?.datetime, baseFossil, granularity);
-      return {
-        zoneKey,
-        granularity,
-        history: Array.isArray(history) ? history : [],
-        isDemoFallback: true,
-      };
+      // Indisponibilité réseau
     }
+
+    const snapshot = EU_REFERENCE_SNAPSHOTS[zoneKey];
+    const lastKnown = getLastKnownObservation(snapshot);
+    const result: CountryHistoryData = {
+      zoneKey,
+      granularity,
+      history: [],
+      isUnavailable: true,
+      message: "Donnée historique indisponible (aucune courbe synthétique n'est générée)",
+      lastKnown,
+    };
+    clientCache.set(cacheKey, result, 15 * 60 * 1000);
+    return result;
   }
 
   /**
    * Récupère les séries temporelles complètes de la « Journée électrique » (24h)
    * Couvre : Carbone, Renouvelable, Bas-carbone, Total Load, Reported Load, Net Load,
    * Solaire, Éolien, Nucléaire, Flux transfrontaliers.
+   * Règle d'intégrité stricte : aucune courbe fabriquée par sinus.
    */
   async getZoneTimeline(
     zoneKey: string,
@@ -207,44 +224,57 @@ export class ElectricityMapsClient {
   ): Promise<TimelineData> {
     const cacheKey = `zone_timeline_${zoneKey}_${granularity}`;
     const cached = clientCache.get<TimelineData>(cacheKey);
-    if (cached && Array.isArray(cached.points) && cached.points.length > 0) {
-      return cached;
-    }
+    if (cached) return cached;
 
     try {
       const res = await fetch(`${this.baseUrl}/timeline?zone=${encodeURIComponent(zoneKey)}&granularity=${encodeURIComponent(granularity)}`);
-      if (!res.ok) {
-        throw new Error(`Erreur HTTP ${res.status}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.points) && data.points.length > 0) {
+          const result: TimelineData = {
+            zoneKey: data.zoneKey || zoneKey,
+            granularity,
+            points: data.points,
+            isDemoFallback: Boolean(data.isDemoFallback),
+          };
+          clientCache.set(cacheKey, result, 15 * 60 * 1000);
+          return result;
+        }
+        if (data && data.isUnavailable) {
+          const result: TimelineData = {
+            zoneKey: data.zoneKey || zoneKey,
+            granularity,
+            points: [],
+            isUnavailable: true,
+            message: data.message || "Donnée historique 24h indisponible (aucune courbe synthétique n'est générée)",
+            lastKnown: data.lastKnown,
+          };
+          clientCache.set(cacheKey, result, 15 * 60 * 1000);
+          return result;
+        }
       }
-      const data = await res.json();
-      const result: TimelineData = {
-        zoneKey: data?.zoneKey || zoneKey,
-        granularity,
-        points: Array.isArray(data?.points) ? data.points : [],
-        isDemoFallback: Boolean(data?.isDemoFallback),
-      };
-      if (result.points.length > 0) {
-        clientCache.set(cacheKey, result, 15 * 60 * 1000);
-        return result;
-      }
-      throw new Error('Empty timeline points returned');
     } catch {
-      const snapshot = EU_REFERENCE_SNAPSHOTS[zoneKey];
-      const points = generateReferenceTimeline(zoneKey, snapshot, snapshot?.datetime, granularity);
-      const result: TimelineData = {
-        zoneKey,
-        granularity,
-        points: Array.isArray(points) ? points : [],
-        isDemoFallback: true,
-      };
-      clientCache.set(cacheKey, result, 15 * 60 * 1000);
-      return result;
+      // Indisponibilité réseau
     }
+
+    const snapshot = EU_REFERENCE_SNAPSHOTS[zoneKey];
+    const lastKnown = getLastKnownObservation(snapshot);
+    const result: TimelineData = {
+      zoneKey,
+      granularity,
+      points: [],
+      isUnavailable: true,
+      message: "Donnée historique 24h indisponible (aucune courbe synthétique n'est générée)",
+      lastKnown,
+    };
+    clientCache.set(cacheKey, result, 15 * 60 * 1000);
+    return result;
   }
 
   /**
    * Récupère l'historique complet du mix électrique sur 24h
    * (nucléaire, éolien, solaire, hydraulique, gaz, charbon, biomasse...)
+   * Règle d'intégrité stricte : aucune courbe fabriquée par sinus.
    */
   async getZoneMixHistory(
     zoneKey: string,
@@ -252,40 +282,128 @@ export class ElectricityMapsClient {
   ): Promise<MixHistoryData> {
     const cacheKey = `zone_mix_history_${zoneKey}_${granularity}`;
     const cached = clientCache.get<MixHistoryData>(cacheKey);
-    if (cached && Array.isArray(cached.points) && cached.points.length > 0) {
-      return cached;
-    }
+    if (cached) return cached;
 
     try {
       const res = await fetch(`${this.baseUrl}/mix-history?zone=${encodeURIComponent(zoneKey)}&granularity=${encodeURIComponent(granularity)}`);
-      if (!res.ok) {
-        throw new Error(`Erreur HTTP ${res.status}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.points) && data.points.length > 0) {
+          const result: MixHistoryData = {
+            zoneKey: data.zoneKey || zoneKey,
+            granularity,
+            points: data.points,
+            isDemoFallback: Boolean(data.isDemoFallback),
+            timestamp: data.timestamp,
+          };
+          clientCache.set(cacheKey, result, 15 * 60 * 1000);
+          return result;
+        }
+        if (data && data.isUnavailable) {
+          const result: MixHistoryData = {
+            zoneKey: data.zoneKey || zoneKey,
+            granularity,
+            points: [],
+            isUnavailable: true,
+            message: data.message || "Historique du mix 24h indisponible (aucune courbe synthétique n'est générée)",
+            lastKnown: data.lastKnown,
+          };
+          clientCache.set(cacheKey, result, 15 * 60 * 1000);
+          return result;
+        }
       }
-      const data = await res.json();
-      const result: MixHistoryData = {
-        zoneKey: data?.zoneKey || zoneKey,
-        granularity,
-        points: Array.isArray(data?.points) ? data.points : [],
-        isDemoFallback: Boolean(data?.isDemoFallback),
-        timestamp: data?.timestamp,
-      };
-      if (result.points.length > 0) {
-        clientCache.set(cacheKey, result, 15 * 60 * 1000);
-        return result;
-      }
-      throw new Error('Empty mix points returned');
     } catch {
-      const snapshot = EU_REFERENCE_SNAPSHOTS[zoneKey];
-      const points = generateReferenceMixHistory(zoneKey, snapshot, snapshot?.datetime, granularity);
-      const result: MixHistoryData = {
-        zoneKey,
-        granularity,
-        points: Array.isArray(points) ? points : [],
-        isDemoFallback: true,
-      };
-      clientCache.set(cacheKey, result, 15 * 60 * 1000);
-      return result;
+      // Indisponibilité réseau
     }
+
+    const snapshot = EU_REFERENCE_SNAPSHOTS[zoneKey];
+    const lastKnown = getLastKnownObservation(snapshot);
+    const result: MixHistoryData = {
+      zoneKey,
+      granularity,
+      points: [],
+      isUnavailable: true,
+      message: "Historique du mix 24h indisponible (aucune courbe synthétique n'est générée)",
+      lastKnown,
+    };
+    clientCache.set(cacheKey, result, 15 * 60 * 1000);
+    return result;
+  }
+
+  /**
+   * Récupère l'historique complet des flux physiques transfrontaliers sur 24h
+   * Conforme à l'endpoint V4 : /v4/electricity-flows/history?zone=XX
+   * Règle d'intégrité stricte : aucune courbe fabriquée par sinus.
+   */
+  async getZoneFlowsHistory(
+    zoneKey: string,
+    granularity: TemporalGranularity = '15_minutes'
+  ): Promise<FlowsHistoryData> {
+    const cacheKey = `zone_flows_history_${zoneKey}_${granularity}`;
+    const cached = clientCache.get<FlowsHistoryData>(cacheKey);
+    if (cached) return cached;
+
+    const snapshot = EU_REFERENCE_SNAPSHOTS[zoneKey];
+    const rawInterconnectors = Array.isArray(snapshot?.exchangeFlows) ? snapshot.exchangeFlows : [];
+    const defaultInterconnectors = rawInterconnectors.map((f) => {
+      const isExport = f.fromZone === zoneKey;
+      const peer = isExport ? f.toZone : f.fromZone;
+      return {
+        peerZone: peer,
+        peerNameFr: peer,
+        peerFlag: '🌐',
+        pairKey: `${f.fromZone}->${f.toZone}`,
+        label: `${f.fromZone} → ${f.toZone}`,
+        reverseLabel: `${f.toZone} → ${f.fromZone}`,
+      };
+    });
+
+    try {
+      const res = await fetch(`${this.baseUrl}/flows-history?zone=${encodeURIComponent(zoneKey)}&granularity=${encodeURIComponent(granularity)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.points) && data.points.length > 0) {
+          const result: FlowsHistoryData = {
+            zoneKey: data.zoneKey || zoneKey,
+            granularity,
+            points: data.points,
+            interconnectors: Array.isArray(data.interconnectors) && data.interconnectors.length > 0 ? data.interconnectors : defaultInterconnectors,
+            isDemoFallback: Boolean(data.isDemoFallback),
+            timestamp: data.timestamp,
+          };
+          clientCache.set(cacheKey, result, 15 * 60 * 1000);
+          return result;
+        }
+        if (data && data.isUnavailable) {
+          const result: FlowsHistoryData = {
+            zoneKey: data.zoneKey || zoneKey,
+            granularity,
+            points: [],
+            interconnectors: Array.isArray(data.interconnectors) && data.interconnectors.length > 0 ? data.interconnectors : defaultInterconnectors,
+            isUnavailable: true,
+            message: data.message || "Historique des flux 24h indisponible (aucune courbe synthétique n'est générée)",
+            lastKnown: data.lastKnown,
+          };
+          clientCache.set(cacheKey, result, 15 * 60 * 1000);
+          return result;
+        }
+      }
+    } catch {
+      // Indisponibilité réseau
+    }
+
+    const lastKnown = getLastKnownObservation(snapshot);
+    const result: FlowsHistoryData = {
+      zoneKey,
+      granularity,
+      points: [],
+      interconnectors: defaultInterconnectors,
+      isUnavailable: true,
+      message: "Historique des flux 24h indisponible (aucune courbe synthétique n'est générée)",
+      lastKnown,
+    };
+    clientCache.set(cacheKey, result, 15 * 60 * 1000);
+    return result;
   }
 }
 

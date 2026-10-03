@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { EU_COUNTRIES } from './src/data/euCountries.ts';
-import { EU_REFERENCE_SNAPSHOTS, generateReferenceHistory, generateReferenceTimeline, generateReferenceMixHistory } from './src/data/referenceData.ts';
+import { EU_REFERENCE_SNAPSHOTS, getLastKnownObservation } from './src/data/referenceData.ts';
 import { normalizeCountrySnapshot } from './src/services/electricityMaps/normalizers.ts';
 
 dotenv.config();
@@ -130,11 +130,15 @@ app.get('/api/electricity-maps/eu-summary', async (_req: Request, res: Response)
 
   // Si aucune clé n'est configurée, servir le jeu de référence factuel certifié
   if (!API_KEY) {
+    const dataTimestamp = EU_REFERENCE_SNAPSHOTS['FR']?.datetime || '2024-03-24T12:00:00.000Z';
+    const retrievedAt = new Date().toISOString();
     const payload = {
       snapshots: EU_REFERENCE_SNAPSHOTS,
       isDemoFallback: true,
-      source: 'Electricity Maps Reference Data (Aucune clé configurée)',
-      timestamp: new Date().toISOString(),
+      source: 'Référence locale',
+      dataTimestamp,
+      retrievedAt,
+      timestamp: retrievedAt,
     };
     setCached(cacheKey, payload, 60 * 1000); // 1 minute
     res.setHeader('X-Cache', 'FALLBACK-NO-KEY');
@@ -182,11 +186,25 @@ app.get('/api/electricity-maps/eu-summary', async (_req: Request, res: Response)
       }
     }
 
+    let latestDataTimestamp: string | null = null;
+    for (const snap of Object.values(results) as any[]) {
+      if (snap?.datetime) {
+        if (!latestDataTimestamp || snap.datetime > latestDataTimestamp) {
+          latestDataTimestamp = snap.datetime;
+        }
+      }
+    }
+    const refDate = EU_REFERENCE_SNAPSHOTS['FR']?.datetime || '2024-03-24T12:00:00.000Z';
+    const dataTimestamp = liveCount > 0 ? (latestDataTimestamp || new Date().toISOString()) : refDate;
+    const retrievedAt = new Date().toISOString();
+
     const payload = {
       snapshots: results,
       isDemoFallback: liveCount === 0,
-      source: liveCount > 0 ? 'Electricity Maps API (Live)' : 'Electricity Maps Reference Data',
-      timestamp: new Date().toISOString(),
+      source: liveCount > 0 ? 'Electricity Maps API (Live)' : 'Référence locale',
+      dataTimestamp,
+      retrievedAt,
+      timestamp: retrievedAt,
     };
 
     setCached(cacheKey, payload, CACHE_TTL_MS);
@@ -194,11 +212,15 @@ app.get('/api/electricity-maps/eu-summary', async (_req: Request, res: Response)
     return res.json(payload);
   } catch (err) {
     console.error('Erreur lors de la génération du résumé UE :', err);
+    const dataTimestamp = EU_REFERENCE_SNAPSHOTS['FR']?.datetime || '2024-03-24T12:00:00.000Z';
+    const retrievedAt = new Date().toISOString();
     return res.json({
       snapshots: EU_REFERENCE_SNAPSHOTS,
       isDemoFallback: true,
-      source: 'Electricity Maps Reference Data (Secours Erreur)',
-      timestamp: new Date().toISOString(),
+      source: 'Référence locale (Secours Erreur)',
+      dataTimestamp,
+      retrievedAt,
+      timestamp: retrievedAt,
     });
   }
 });
@@ -388,18 +410,20 @@ app.get('/api/electricity-maps/history', async (req: Request, res: Response) => 
     }
   }
 
-  // Fallback 24h factuel certifié avec granularité demandée (15 min par défaut)
+  // Règle d'intégrité stricte : ZÉRO donnée inventée par fonction mathématique (sinus)
+  // En l'absence de données historiques amont fournies par l'API, indiquer explicitement
+  // l'indisponibilité et fournir uniquement la dernière observation réellement connue.
   const countryCode = country ? country.code : zone;
   const snapshot = EU_REFERENCE_SNAPSHOTS[countryCode];
-  const baseIntensity = snapshot?.carbonIntensity ?? 150;
-  const baseFossilIntensity = snapshot?.fossilOnlyCarbonIntensity ?? null;
-  const history = generateReferenceHistory(zone, baseIntensity, snapshot?.datetime, baseFossilIntensity, granularity);
+  const lastKnown = getLastKnownObservation(snapshot);
 
   const payload = {
     zoneKey: zone,
     granularity,
-    history,
-    isDemoFallback: true,
+    history: [],
+    isUnavailable: true,
+    message: "Donnée historique indisponible (aucune courbe synthétique n'est générée)",
+    lastKnown,
   };
   setCached(cacheKey, payload, 15 * 60 * 1000);
   return res.json(payload);
@@ -440,18 +464,33 @@ app.get('/api/electricity-maps/timeline', async (req: Request, res: Response) =>
       ]);
 
       if (liveCarbon && Array.isArray(liveCarbon.history) && liveCarbon.history.length > 0) {
-        const timelinePoints = generateReferenceTimeline(zone, snapshot, snapshot?.datetime, granularity);
-        const carbonMap = new Map<string, number>();
-        for (const c of liveCarbon.history) {
-          if (c.datetime && c.carbonIntensity !== undefined) {
-            carbonMap.set(c.datetime, Math.round(c.carbonIntensity));
-          }
-        }
-        for (const pt of timelinePoints) {
-          if (carbonMap.has(pt.datetime)) {
-            pt.carbonIntensity = carbonMap.get(pt.datetime)!;
-          }
-        }
+        const timelinePoints = liveCarbon.history.map((c: any) => {
+          const dt = c.datetime;
+          const mixItem = Array.isArray(liveMix?.history) ? liveMix.history.find((m: any) => m.datetime === dt) : null;
+          const breakdown = mixItem?.mix?.production || mixItem?.powerProductionBreakdown || {};
+          const fossilItem = Array.isArray(liveFossil?.history) ? liveFossil.history.find((f: any) => f.datetime === dt) : null;
+
+          return {
+            datetime: dt,
+            carbonIntensity: c.carbonIntensity !== undefined ? Math.round(c.carbonIntensity) : null,
+            fossilOnlyCarbonIntensity: fossilItem?.carbonIntensity !== undefined ? Math.round(fossilItem.carbonIntensity) : null,
+            renewablePercentage: mixItem?.renewablePercentage ?? null,
+            fossilFreePercentage: mixItem?.fossilFreePercentage ?? null,
+            totalLoad: mixItem?.totalConsumption ?? null,
+            totalReportedLoad: null,
+            netLoad: null,
+            solar: breakdown.solar !== undefined ? Math.round(breakdown.solar) : null,
+            wind: breakdown.wind !== undefined ? Math.round(breakdown.wind) : null,
+            nuclear: breakdown.nuclear !== undefined ? Math.round(breakdown.nuclear) : null,
+            hydro: breakdown.hydro !== undefined ? Math.round(breakdown.hydro) : null,
+            gas: breakdown.gas !== undefined ? Math.round(breakdown.gas) : null,
+            coal: breakdown.coal !== undefined ? Math.round(breakdown.coal) : null,
+            netExport: mixItem?.netExport ?? null,
+            importTotal: null,
+            exportTotal: null,
+            isEstimated: Boolean(c.isEstimated),
+          };
+        });
 
         const payload = {
           zoneKey: zone,
@@ -468,14 +507,15 @@ app.get('/api/electricity-maps/timeline', async (req: Request, res: Response) =>
     }
   }
 
-  // Fallback 24h haute fidélité synchronisé
-  const points = generateReferenceTimeline(zone, snapshot, snapshot?.datetime, granularity);
+  // Règle d'intégrité stricte : aucune courbe fabriquée par sinus
+  const lastKnown = getLastKnownObservation(snapshot);
   const payload = {
     zoneKey: zone,
     granularity,
-    points,
-    isDemoFallback: true,
-    timestamp: new Date().toISOString(),
+    points: [],
+    isUnavailable: true,
+    message: "Donnée historique 24h indisponible (aucune courbe synthétique n'est générée)",
+    lastKnown,
   };
   setCached(cacheKey, payload, 15 * 60 * 1000);
   return res.json(payload);
@@ -567,20 +607,158 @@ app.get('/api/electricity-maps/mix-history', async (req: Request, res: Response)
     }
   }
 
-  // Fallback haute fidélité synchronisé
-  const points = generateReferenceMixHistory(zone, snapshot, snapshot?.datetime, granularity);
+  // Règle d'intégrité stricte : aucune courbe fabriquée par sinus
+  const lastKnown = getLastKnownObservation(snapshot);
   const payload = {
     zoneKey: zone,
     granularity,
-    points,
-    isDemoFallback: true,
-    timestamp: new Date().toISOString(),
+    points: [],
+    isUnavailable: true,
+    message: "Historique du mix 24h indisponible (aucune courbe synthétique n'est générée)",
+    lastKnown,
+  };
+  setCached(cacheKey, payload, 15 * 60 * 1000);
+  return res.json(payload);
+});
+
+/**
+ * GET /api/electricity-maps/flows-history?zone=FR&granularity=15_minutes
+ * Renvoie l'historique complet des flux transfrontaliers sur 24 heures
+ * Conforme à l'endpoint officiel V4 : /v4/electricity-flows/history?zone=XX&temporalResolution=...
+ * Permet d'observer l'évolution heure par heure des échanges (ex: France → Allemagne : 00h 1,2 GW, 03h 1,7 GW, 06h 2,1 GW...)
+ */
+app.get('/api/electricity-maps/flows-history', async (req: Request, res: Response) => {
+  const zone = (req.query.zone as string) || 'FR';
+  const rawGranularity = (req.query.granularity as string) || (req.query.temporalResolution as string) || '15_minutes';
+  const granularity = (rawGranularity === '5_minutes' || rawGranularity === 'hourly') ? rawGranularity : '15_minutes';
+
+  const country = EU_COUNTRIES.find((c) => c.zoneKey === zone || c.code === zone);
+  const cacheKey = `server_flows_history_${zone}_${granularity}`;
+
+  const cached = getCached<unknown>(cacheKey);
+  if (cached) {
+    return res.json(cached);
+  }
+
+  const countryCode = country ? country.code : zone;
+  const snapshot = EU_REFERENCE_SNAPSHOTS[countryCode];
+
+  if (API_KEY) {
+    try {
+      const encodedZone = encodeURIComponent(zone);
+      const upstreamFlows = await fetchElectricityMaps<any>(`${V4_BASE}/electricity-flows/history?zone=${encodedZone}&temporalResolution=${encodeURIComponent(granularity)}`)
+        || await fetchElectricityMaps<any>(`${V4_BASE}/power-breakdown/history?zone=${encodedZone}`);
+
+      if (upstreamFlows && Array.isArray(upstreamFlows.history) && upstreamFlows.history.length > 0) {
+        const rawInterconnectors = Array.isArray(snapshot?.exchangeFlows) ? snapshot.exchangeFlows : [];
+        const interconnectors = rawInterconnectors.map((f) => {
+          const isExport = f.fromZone === zone;
+          const peer = isExport ? f.toZone : f.fromZone;
+          return {
+            peerZone: peer,
+            peerNameFr: peer,
+            peerFlag: '🌐',
+            pairKey: `${f.fromZone}->${f.toZone}`,
+            label: `${f.fromZone} → ${f.toZone}`,
+            reverseLabel: `${f.toZone} → ${f.fromZone}`,
+          };
+        });
+
+        const points = upstreamFlows.history.map((h: any) => {
+          const d = new Date(h.datetime);
+          const hourLabel = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+          const fullDateLabel = `${d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} à ${hourLabel}`;
+          const flows: Record<string, number> = {};
+          let netExportTotal = 0;
+          let importTotal = 0;
+          let exportTotal = 0;
+
+          const rawBreakdown = h.flows || h.powerExchangeBreakdown || {};
+          for (const [peer, rawVal] of Object.entries(rawBreakdown)) {
+            const val = typeof rawVal === 'number' ? Math.round(rawVal) : 0;
+            flows[peer] = val;
+            netExportTotal += val;
+            if (val > 0) {
+              exportTotal += val;
+            } else {
+              importTotal += Math.abs(val);
+            }
+          }
+
+          const flowItems = interconnectors.map((meta) => {
+            const val = flows[meta.peerZone] ?? 0;
+            const isExport = val >= 0;
+            return {
+              fromZone: isExport ? zone : meta.peerZone,
+              toZone: isExport ? meta.peerZone : zone,
+              flowMW: Math.abs(val),
+              isExport,
+              peerZone: meta.peerZone,
+              peerNameFr: meta.peerNameFr,
+              peerFlag: meta.peerFlag,
+            };
+          });
+
+          return {
+            datetime: h.datetime,
+            hourLabel,
+            fullDateLabel,
+            flows,
+            flowItems,
+            netExportTotal: netExportTotal || Math.round(h.netExport || 0),
+            importTotal,
+            exportTotal,
+            isEstimated: Boolean(h.isEstimated),
+          };
+        });
+
+        const payload = {
+          zoneKey: zone,
+          granularity,
+          points,
+          interconnectors,
+          isDemoFallback: false,
+          timestamp: new Date().toISOString(),
+        };
+        setCached(cacheKey, payload, 15 * 60 * 1000);
+        return res.json(payload);
+      }
+    } catch (e) {
+      console.warn(`[Flows History Upstream Error] zone=${zone}:`, e);
+    }
+  }
+
+  // Règle d'intégrité stricte : aucune courbe fabriquée par sinus
+  const lastKnown = getLastKnownObservation(snapshot);
+  const rawInterconnectors = Array.isArray(snapshot?.exchangeFlows) ? snapshot.exchangeFlows : [];
+  const interconnectors = rawInterconnectors.map((f) => {
+    const isExport = f.fromZone === zone;
+    const peer = isExport ? f.toZone : f.fromZone;
+    return {
+      peerZone: peer,
+      peerNameFr: peer,
+      peerFlag: '🌐',
+      pairKey: `${f.fromZone}->${f.toZone}`,
+      label: `${f.fromZone} → ${f.toZone}`,
+      reverseLabel: `${f.toZone} → ${f.fromZone}`,
+    };
+  });
+
+  const payload = {
+    zoneKey: zone,
+    granularity,
+    points: [],
+    interconnectors,
+    isUnavailable: true,
+    message: "Historique des flux 24h indisponible (aucune courbe synthétique n'est générée)",
+    lastKnown,
   };
   setCached(cacheKey, payload, 15 * 60 * 1000);
   return res.json(payload);
 });
 
 // Proxy sécurisé pour les tuiles de fond cartographique CARTO Basemaps avec clé API injectée côté serveur
+// Fallback automatique vers OpenStreetMap en cas d'erreur ou d'échec de CARTO
 app.get('/api/carto/tiles/:style/:z/:x/:y.png', async (req: Request, res: Response) => {
   const { style, z, x, y } = req.params;
   const validStyles = ['light_all', 'dark_all', 'rastertiles', 'light_nolabels', 'dark_nolabels', 'voyager'];
@@ -590,10 +768,18 @@ app.get('/api/carto/tiles/:style/:z/:x/:y.png', async (req: Request, res: Respon
   const cartoUrl = `https://a.basemaps.cartocdn.com/rastertiles/${targetStyle}/${z}/${x}/${y}.png?api_key=${encodeURIComponent(CARTO_API_KEY)}`;
 
   try {
-    const upstreamRes = await fetch(cartoUrl);
+    let upstreamRes = await fetch(cartoUrl);
     if (!upstreamRes.ok) {
-      // Si CARTO upstream renvoie une erreur, tenter le fallback OSM ou renvoyer le code
-      return res.status(upstreamRes.status).send('Erreur lors du chargement de la tuile cartographique');
+      console.warn(`[CARTO Proxy] CARTO a retourné HTTP ${upstreamRes.status} pour ${style}/${z}/${x}/${y}. Bascule automatique vers OpenStreetMap.`);
+      const osmUrl = `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+      upstreamRes = await fetch(osmUrl, {
+        headers: {
+          'User-Agent': 'EUEnergyMap/1.0 (European Electricity Network Observatoire; mailto:contact@energy-observatory.eu)',
+        },
+      });
+      if (!upstreamRes.ok) {
+        return res.status(upstreamRes.status).send('Erreur lors du chargement de la tuile cartographique');
+      }
     }
 
     const contentType = upstreamRes.headers.get('content-type') || 'image/png';
@@ -604,8 +790,25 @@ app.get('/api/carto/tiles/:style/:z/:x/:y.png', async (req: Request, res: Respon
     res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
     return res.send(Buffer.from(buffer));
   } catch (err) {
-    console.error('[CARTO Proxy] Erreur réseau:', err);
-    return res.status(502).send('Passerelle introuvable');
+    console.warn('[CARTO Proxy] Erreur réseau CARTO, tentative de secours immédiat sur OpenStreetMap:', err);
+    try {
+      const osmUrl = `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+      const osmRes = await fetch(osmUrl, {
+        headers: {
+          'User-Agent': 'EUEnergyMap/1.0 (European Electricity Network Observatoire; mailto:contact@energy-observatory.eu)',
+        },
+      });
+      if (osmRes.ok) {
+        const contentType = osmRes.headers.get('content-type') || 'image/png';
+        const buffer = await osmRes.arrayBuffer();
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+        return res.send(Buffer.from(buffer));
+      }
+    } catch (osmErr) {
+      console.error('[CARTO Proxy] Échec du repli OSM:', osmErr);
+    }
+    return res.status(502).send('Passerelle cartographique introuvable');
   }
 });
 

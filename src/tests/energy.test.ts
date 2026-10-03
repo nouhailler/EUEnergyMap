@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { EU_COUNTRIES, EU_COUNTRY_MAP } from '../data/euCountries';
 import { normalizeCountrySnapshot, computeEUSummary } from '../services/electricityMaps/normalizers';
 import { PRODUCTION_SOURCES } from '../data/sourcesMeta';
-import { generateReferenceHistory } from '../data/referenceData';
+import { getLastKnownObservation, EU_REFERENCE_SNAPSHOTS } from '../data/referenceData';
 
 describe('EU Energy Map - Configuration & Modèle', () => {
   it('contient exactement les 27 pays membres de l’Union Européenne', () => {
@@ -223,22 +223,23 @@ describe('Normalisation des données & Règle d’intégrité', () => {
     expect(summary.coveredCountriesCount).toBe(2);
   });
 
-  it('génère un historique avec résolution 15 minutes par défaut (97 points sur 24h)', () => {
-    const history15 = generateReferenceHistory('FR', 40, '2024-03-24T12:00:00Z', null);
-    // (24 * 60) / 15 + 1 = 97 points
-    expect(history15.length).toBe(97);
-    expect(history15[0].carbonIntensity).toBeGreaterThan(0);
+  it('respecte la règle stricte « Zéro donnée inventée » : pas de fausse courbe sinusoïdale', () => {
+    const frSnapshot = EU_REFERENCE_SNAPSHOTS['FR'];
+    const lastKnown = getLastKnownObservation(frSnapshot);
+
+    expect(lastKnown).not.toBeNull();
+    expect(lastKnown?.carbonIntensity).toBe(frSnapshot.carbonIntensity);
+    expect(lastKnown?.datetime).toBe(frSnapshot.datetime);
+    expect(lastKnown?.isEstimated).toBe(false);
   });
 
-  it('supporte la résolution ultra-haute fréquence 5 minutes (289 points sur 24h)', () => {
-    const history5 = generateReferenceHistory('FR', 40, '2024-03-24T12:00:00Z', null, '5_minutes');
-    // (24 * 60) / 5 + 1 = 289 points
-    expect(history5.length).toBe(289);
-  });
+  it('fournit la dernière observation certifiée pour un pays et gère proprement les données absentes', () => {
+    const nullResult = getLastKnownObservation(null);
+    expect(nullResult).toBeNull();
 
-  it('supporte la résolution horaire (25 points sur 24h)', () => {
-    const historyHourly = generateReferenceHistory('FR', 40, '2024-03-24T12:00:00Z', null, 'hourly');
-    // 24 + 1 = 25 points
-    expect(historyHourly.length).toBe(25);
+    const deSnapshot = EU_REFERENCE_SNAPSHOTS['DE'];
+    const deLast = getLastKnownObservation(deSnapshot);
+    expect(deLast?.renewablePercentage).toBe(deSnapshot.renewablePercentage);
+    expect(deLast?.productionBreakdown).toBeDefined();
   });
 });

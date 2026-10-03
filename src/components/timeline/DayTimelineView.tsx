@@ -50,6 +50,7 @@ import { EU_COUNTRIES } from '../../data/euCountries';
 import { EU_REFERENCE_SNAPSHOTS } from '../../data/referenceData';
 import { emapsClient } from '../../services/electricityMaps/client';
 import { CountryMixHistorySection } from '../countries/CountryMixHistorySection';
+import { CountryFlowsHistorySection } from '../flows/CountryFlowsHistorySection';
 
 interface DayTimelineViewProps {
   snapshots: Record<string, CountryElectricitySnapshot>;
@@ -76,7 +77,7 @@ export const DayTimelineView: React.FC<DayTimelineViewProps> = ({
   const [showAverageLine, setShowAverageLine] = useState<boolean>(true);
   const [chartType, setChartType] = useState<'area' | 'line'>('area');
   const [selectorLayout, setSelectorLayout] = useState<'cards' | 'radioList'>('radioList');
-  const [timelineMode, setTimelineMode] = useState<'indicator' | 'mix'>('indicator');
+  const [timelineMode, setTimelineMode] = useState<'indicator' | 'mix' | 'flows'>('indicator');
 
   // Synchronisation si le pays sélectionné change depuis l'extérieur
   useEffect(() => {
@@ -385,11 +386,11 @@ export const DayTimelineView: React.FC<DayTimelineViewProps> = ({
         </div>
       </div>
 
-      {/* Sélecteur de mode de Timeline : 10 Indicateurs vs Mix Électrique Complet (Empilé 24h) */}
+      {/* Sélecteur de mode de Timeline : 10 Indicateurs vs Mix Électrique vs Flux Transfrontaliers (24h) */}
       <div className="flex flex-col sm:flex-row items-center gap-2 p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
         <button
           onClick={() => setTimelineMode('indicator')}
-          className={`w-full sm:w-auto flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold transition cursor-pointer ${
+          className={`w-full sm:w-auto flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer ${
             timelineMode === 'indicator'
               ? 'bg-white dark:bg-slate-800 text-sky-700 dark:text-sky-300 shadow-xs'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -401,16 +402,31 @@ export const DayTimelineView: React.FC<DayTimelineViewProps> = ({
 
         <button
           onClick={() => setTimelineMode('mix')}
-          className={`w-full sm:w-auto flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold transition cursor-pointer ${
+          className={`w-full sm:w-auto flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer ${
             timelineMode === 'mix'
               ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 shadow-xs'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
           <Zap className="w-4 h-4 text-amber-500" />
-          <span>⚡ Historique du Mix Électrique (Empilé 24h)</span>
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
+          <span>⚡ Mix Électrique & Rubans 24h</span>
+          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
             Filières
+          </span>
+        </button>
+
+        <button
+          onClick={() => setTimelineMode('flows')}
+          className={`w-full sm:w-auto flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition cursor-pointer ${
+            timelineMode === 'flows'
+              ? 'bg-white dark:bg-slate-800 text-sky-700 dark:text-sky-300 shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <ArrowRightLeft className="w-4 h-4 text-teal-500" />
+          <span>⇄ Flux Transfrontaliers (24h)</span>
+          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300">
+            Échanges
           </span>
         </button>
       </div>
@@ -418,6 +434,15 @@ export const DayTimelineView: React.FC<DayTimelineViewProps> = ({
       {timelineMode === 'mix' ? (
         <CountryMixHistorySection
           snapshot={activeSnapshot || snapshots[selectedZone] || EU_REFERENCE_SNAPSHOTS[selectedZone] || EU_REFERENCE_SNAPSHOTS['FR']}
+          onNavigate={onNavigate}
+        />
+      ) : timelineMode === 'flows' ? (
+        <CountryFlowsHistorySection
+          snapshot={activeSnapshot || snapshots[selectedZone] || EU_REFERENCE_SNAPSHOTS[selectedZone] || EU_REFERENCE_SNAPSHOTS['FR']}
+          onSelectCountry={(code) => {
+            setSelectedZone(code);
+            onSelectCountry(code);
+          }}
           onNavigate={onNavigate}
         />
       ) : (
@@ -806,8 +831,22 @@ export const DayTimelineView: React.FC<DayTimelineViewProps> = ({
               <p className="text-xs text-slate-500 font-medium">Synchronisation de la timeline 24h ({granularity})...</p>
             </div>
           ) : chartData.length === 0 ? (
-            <div className="h-full flex items-center justify-center rounded-2xl bg-slate-50 dark:bg-slate-900/40 text-xs text-slate-400 italic">
-              Aucune donnée temporelle disponible pour cette zone.
+            <div className="h-full flex flex-col items-center justify-center p-6 rounded-2xl bg-slate-50/80 dark:bg-slate-900/40 text-center space-y-3">
+              <div className="inline-flex p-3 rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400">
+                <Clock className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                  Donnée historique 24h indisponible pour cet indicateur
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-lg mx-auto">
+                  Conformément à la règle <strong>« Zéro donnée inventée »</strong>, aucune courbe artificielle n'est simulée par fonction sinus. Seule la dernière observation certifiée est enregistrée.
+                </p>
+              </div>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono">
+                <span className="text-slate-400">Dernier relevé connu ({currentIndicatorMeta.label}) :</span>
+                <span className="font-bold text-slate-900 dark:text-white">{getLiveIndicatorValue(indicator).text}</span>
+              </div>
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%" minWidth={300} minHeight={280}>

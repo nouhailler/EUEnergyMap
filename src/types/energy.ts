@@ -60,6 +60,9 @@ export interface CountryElectricitySnapshot {
 
   datetime: string;              // Horodatage ISO de la mesure
   updatedAt: string;             // Horodatage ISO de mise à jour chez Electricity Maps
+  dataTimestamp?: string;        // Date et heure effectives de la donnée mesurée (ex: "2024-03-24T12:00:00Z")
+  retrievedAt?: string;          // Date et heure de récupération / synchro par l'application (ex: "2026-10-03T11:35:00Z")
+  source?: string;               // Source factuelle (ex: "Référence locale", "Electricity Maps API (Live)")
 
   // --- Les 13 signaux officiels de l'API Electricity Maps V4 ---
 
@@ -178,6 +181,17 @@ export interface CountryHistoryData {
   granularity?: TemporalGranularity;
   history: CarbonHistoryPoint[];
   isDemoFallback?: boolean;
+  isUnavailable?: boolean;
+  message?: string;
+  dataTimestamp?: string;
+  retrievedAt?: string;
+  source?: string;
+  lastKnown?: {
+    datetime: string;
+    carbonIntensity: number | null;
+    fossilOnlyCarbonIntensity?: number | null;
+    updatedAt?: string;
+  } | null;
 }
 
 export type TimelineIndicator =
@@ -338,6 +352,12 @@ export interface TimelineData {
   granularity: TemporalGranularity;
   points: TimelineHistoryPoint[];
   isDemoFallback?: boolean;
+  isUnavailable?: boolean;
+  message?: string;
+  dataTimestamp?: string;
+  retrievedAt?: string;
+  source?: string;
+  lastKnown?: any;
 }
 
 export interface MixHistoryPoint {
@@ -365,7 +385,59 @@ export interface MixHistoryData {
   granularity: TemporalGranularity;
   points: MixHistoryPoint[];
   isDemoFallback?: boolean;
+  isUnavailable?: boolean;
+  message?: string;
+  dataTimestamp?: string;
+  retrievedAt?: string;
+  source?: string;
   timestamp?: string;
+  lastKnown?: any;
+}
+
+export interface InterconnectorFlowItem {
+  fromZone: string;
+  toZone: string;
+  flowMW: number;
+  isExport: boolean;
+  peerZone: string;
+  peerNameFr: string;
+  peerFlag: string;
+}
+
+export interface FlowHistoryPoint {
+  datetime: string;
+  hourLabel: string;
+  fullDateLabel: string;
+  flows: Record<string, number>; // peerZone -> net flowMW (positive = export, negative = import)
+  flowItems: InterconnectorFlowItem[];
+  netExportTotal: number;
+  importTotal: number;
+  exportTotal: number;
+  isEstimated: boolean;
+}
+
+export interface InterconnectorMeta {
+  peerZone: string;
+  peerNameFr: string;
+  peerFlag: string;
+  pairKey: string; // "FR->DE"
+  label: string;   // "France → Allemagne"
+  reverseLabel: string; // "Allemagne → France"
+}
+
+export interface FlowsHistoryData {
+  zoneKey: string;
+  granularity: TemporalGranularity;
+  points: FlowHistoryPoint[];
+  interconnectors: InterconnectorMeta[];
+  isDemoFallback?: boolean;
+  isUnavailable?: boolean;
+  message?: string;
+  dataTimestamp?: string;
+  retrievedAt?: string;
+  source?: string;
+  timestamp?: string;
+  lastKnown?: any;
 }
 
 export type IndicatorMode =

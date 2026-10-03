@@ -20,6 +20,7 @@ import { UnitFormattedValue } from '../common/UnitFormattedValue';
 import { DataQualityBadge } from '../common/DataQualityBadge';
 import { CountryHistorySection } from './CountryHistorySection';
 import { CountryMixHistorySection } from './CountryMixHistorySection';
+import { CountryFlowsHistorySection } from '../flows/CountryFlowsHistorySection';
 import { ApiV4SignalsSection } from './ApiV4SignalsSection';
 import { formatCarbonFreeLevelBadge, formatCarbonIntensityLevelBadge, formatRenewableLevelBadge } from '../../services/electricityMaps/normalizers';
 
@@ -601,6 +602,9 @@ export const CountryDetailView: React.FC<CountryDetailViewProps> = ({
 
       {/* Section Historique du Mix Électrique (24h) - Filière par filière */}
       <CountryMixHistorySection snapshot={snapshot} onNavigate={onNavigate} />
+
+      {/* Section Historique des Flux Transfrontaliers (24h) - Heure par heure */}
+      <CountryFlowsHistorySection snapshot={snapshot} onSelectCountry={onSelectCountry} onNavigate={onNavigate} />
 
       {/* Section Complète : Les 13 Signaux Officiels de l'API Electricity Maps V4 */}
       <ApiV4SignalsSection snapshot={snapshot} />

@@ -314,6 +314,18 @@ export const EUEnergyMap: React.FC<EUEnergyMapProps> = ({
       opacity: 0.9,
     });
 
+    // En cas d'erreur de chargement sur CARTO, repli automatique immédiat sur OpenStreetMap
+    tileLayer.on('tileerror', (errorEvent: any) => {
+      if (errorEvent?.tile && !errorEvent.tile.dataset?.fallbackTried) {
+        errorEvent.tile.dataset = errorEvent.tile.dataset || {};
+        errorEvent.tile.dataset.fallbackTried = 'true';
+        const coords = errorEvent.coords;
+        if (coords) {
+          errorEvent.tile.src = `https://tile.openstreetmap.org/${coords.z}/${coords.x}/${coords.y}.png`;
+        }
+      }
+    });
+
     tileLayer.addTo(map);
     tileLayerRef.current = tileLayer;
   }, [selectedTileTheme]);

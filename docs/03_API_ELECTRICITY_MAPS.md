@@ -115,7 +115,44 @@ L'application expose une vue temporelle continue modélisant l'intégralité des
 
 ---
 
-## 5. Codes d'Erreurs & Stratégie de Résilience
+## 5. Historique du Mix Électrique & Profils Physiques 24h (`/v4/electricity-mix/history`)
+
+L'application exploite l'endpoint officiel V4 `/v4/electricity-mix/history?zone=XX&temporalResolution=...` pour reconstituer heure par heure les profils physiques de chaque filière :
+- **Nucléaire ☢️** : Ruban stable de production continue (`───────────────────────────────`)
+- **Éolien 💨** : Ondulation météorologique synoptique (`╭──────────╮`)
+- **Solaire ☀️** : Cloche diurne centrée sur le midi solaire (`╭────────╮`)
+- **Hydraulique 💧**, **Gaz 🔥**, **Charbon 🪨**, **Biomasse 🌱**...
+
+Chaque filière affiche sa puissance en GW aux 5 jalons cardinaux de la journée (`00h`, `06h`, `12h`, `18h`, `24h`), accompagnée d'une courbe continue SVG interactive et de filtres par filière.
+
+---
+
+## 6. Historique des Flux Transfrontaliers (`/v4/electricity-flows/history`)
+
+L'application interroge l'endpoint officiel V4 `/v4/electricity-flows/history?zone=XX&temporalResolution=...` pour afficher l'historique continu des échanges transfrontaliers frontière par frontière :
+- Exemple France → Allemagne :
+  - `00h` : 1,2 GW
+  - `03h` : 1,7 GW
+  - `06h` : 2,1 GW
+  - `09h` : 2,8 GW
+  - `12h` : 2,4 GW
+  - `15h` : 2,6 GW
+  - `18h` : 3,1 GW (pointe du soir)
+  - `21h` : 2,2 GW
+  - `24h` : 1,4 GW
+- Graphique continu Recharts (en GW / MW), sélecteur d'interconnexion, mode multi-frontières et métriques d'énergie totale échangée (GWh).
+
+---
+
+## 7. Fonds Cartographiques CARTO Basemaps & Secours OpenStreetMap
+
+- **Proxy CARTO** : `GET /api/carto/tiles/:style/:z/:x/:y.png`
+- **Clé API configurée** : `cb1_401f_1_81e88d5ab80e13c7924b8b1d` injectée côté serveur.
+- **Stratégie de tolérance aux pannes** : Si CARTO renvoie une erreur (quota, indisponibilité, 401/403/500), le serveur et le client basculent automatiquement et instantanément sur les tuiles OpenStreetMap (`https://tile.openstreetmap.org/{z}/{x}/{y}.png`).
+
+---
+
+## 8. Codes d'Erreurs & Stratégie de Résilience
 
 - **401 Unauthorized / 403 Forbidden** : Clé API absente ou invalide. Le proxy répond avec code explicite et fournit le mode démonstration certifié avec badge clair.
 - **404 Not Found** : Zone non supportée ou sans données actives. L'application affiche "Zone non couverte ou donnée indisponible".

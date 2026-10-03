@@ -16,8 +16,10 @@ import {
 import { CountryElectricitySnapshot, CrossBorderFlow } from '../../types/energy';
 import { EU_COUNTRIES } from '../../data/euCountries';
 import { ALL_GRID_NODES, getGridNode } from '../../data/gridTopology';
+import { EU_REFERENCE_SNAPSHOTS } from '../../data/referenceData';
 import { FlowsMap } from './FlowsMap';
 import { FlowsStarDiagram } from './FlowsStarDiagram';
+import { CountryFlowsHistorySection } from './CountryFlowsHistorySection';
 
 interface FlowsViewProps {
   snapshots: Record<string, CountryElectricitySnapshot>;
@@ -417,6 +419,16 @@ export const FlowsView: React.FC<FlowsViewProps> = ({ snapshots, onSelectCountry
           </table>
         </div>
       </div>
+
+      {/* Historique officiel des flux transfrontaliers 24h (API V4 /v4/electricity-flows/history) */}
+      <CountryFlowsHistorySection
+        snapshot={
+          (selectedCountryFilter !== 'ALL' && snapshots[selectedCountryFilter])
+            ? snapshots[selectedCountryFilter]
+            : (snapshots['FR'] || EU_REFERENCE_SNAPSHOTS['FR'])
+        }
+        onSelectCountry={onSelectCountry}
+      />
 
       {/* Note technique sur le couplage physique et commercial */}
       <div className="bg-sky-50/50 dark:bg-sky-950/20 p-4 rounded-xl border border-sky-100 dark:border-sky-900/40 text-xs text-sky-900 dark:text-sky-300 flex items-start gap-3">
