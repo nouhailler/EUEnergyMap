@@ -51,6 +51,7 @@ import { EU_REFERENCE_SNAPSHOTS } from '../../data/referenceData';
 import { emapsClient } from '../../services/electricityMaps/client';
 import { CountryMixHistorySection } from '../countries/CountryMixHistorySection';
 import { CountryFlowsHistorySection } from '../flows/CountryFlowsHistorySection';
+import { DataProvenanceBanner } from '../common/DataProvenanceBanner';
 
 interface DayTimelineViewProps {
   snapshots: Record<string, CountryElectricitySnapshot>;
@@ -349,6 +350,14 @@ export const DayTimelineView: React.FC<DayTimelineViewProps> = ({
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-3xl leading-relaxed">
             Exploration chronologique continue de l'ensemble des 10 grandeurs physiques et signaux V4 d'Electricity Maps sur les dernières 24 heures glissantes.
           </p>
+          <div className="mt-2">
+            <DataProvenanceBanner
+              dataTimestamp={activeSnapshot?.dataTimestamp || activeSnapshot?.datetime}
+              retrievedAt={activeSnapshot?.retrievedAt || activeSnapshot?.updatedAt}
+              source={activeSnapshot?.source}
+              variant="inline"
+            />
+          </div>
         </div>
 
         {/* Sélecteur de pays et bouton rafraîchir */}
@@ -846,6 +855,14 @@ export const DayTimelineView: React.FC<DayTimelineViewProps> = ({
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono">
                 <span className="text-slate-400">Dernier relevé connu ({currentIndicatorMeta.label}) :</span>
                 <span className="font-bold text-slate-900 dark:text-white">{getLiveIndicatorValue(indicator).text}</span>
+              </div>
+              <div className="pt-2 flex justify-center">
+                <DataProvenanceBanner
+                  dataTimestamp={activeSnapshot?.dataTimestamp || activeSnapshot?.datetime}
+                  retrievedAt={activeSnapshot?.retrievedAt || activeSnapshot?.updatedAt}
+                  source={activeSnapshot?.source}
+                  variant="inline"
+                />
               </div>
             </div>
           ) : (

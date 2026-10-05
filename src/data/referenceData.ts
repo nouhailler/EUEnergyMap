@@ -1195,9 +1195,15 @@ for (const snap of Object.values(EU_REFERENCE_SNAPSHOTS)) {
  */
 export function getLastKnownObservation(snapshot?: CountryElectricitySnapshot | null) {
   if (!snapshot) return null;
+  const dataTimestamp = snapshot.dataTimestamp || snapshot.datetime || '2024-03-24T12:00:00.000Z';
+  const retrievedAt = snapshot.retrievedAt || snapshot.updatedAt || new Date().toISOString();
+  const source = snapshot.source || 'Référence locale';
   return {
     datetime: snapshot.datetime,
     updatedAt: snapshot.updatedAt,
+    dataTimestamp,
+    retrievedAt,
+    source,
     carbonIntensity: snapshot.carbonIntensity,
     fossilOnlyCarbonIntensity: snapshot.fossilOnlyCarbonIntensity ?? null,
     carbonIntensityLevel: snapshot.carbonIntensityLevel,

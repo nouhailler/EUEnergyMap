@@ -21,6 +21,7 @@ import {
 } from 'recharts';
 import { CarbonHistoryPoint, CountryElectricitySnapshot, TemporalGranularity, GRANULARITY_OPTIONS } from '../../types/energy';
 import { emapsClient } from '../../services/electricityMaps/client';
+import { DataProvenanceBanner } from '../common/DataProvenanceBanner';
 
 interface CountryHistorySectionProps {
   snapshot: CountryElectricitySnapshot;
@@ -395,6 +396,14 @@ export const CountryHistorySection: React.FC<CountryHistorySectionProps> = ({ sn
                 <span className="font-bold text-slate-900 dark:text-white">{snapshot.carbonIntensity} gCO₂eq/kWh</span>
               </div>
             )}
+            <div className="pt-2 flex justify-center">
+              <DataProvenanceBanner
+                dataTimestamp={snapshot.dataTimestamp || snapshot.datetime}
+                retrievedAt={snapshot.retrievedAt || snapshot.updatedAt}
+                source={snapshot.source}
+                variant="inline"
+              />
+            </div>
           </div>
         ) : (
           <div className="h-72 w-full pt-2">

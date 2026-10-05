@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
 import { HamburgerMenu } from './HamburgerMenu';
+import { formatDataDateTime } from './DataProvenanceBanner';
 
 interface NavbarProps {
   currentView: string;
@@ -21,6 +22,9 @@ interface NavbarProps {
   isRefreshing: boolean;
   isDemoFallback: boolean;
   lastUpdated: string | null;
+  dataTimestamp?: string | null;
+  retrievedAt?: string | null;
+  dataSource?: string | null;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -31,6 +35,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   isRefreshing,
   isDemoFallback,
   lastUpdated,
+  dataTimestamp,
+  retrievedAt,
+  dataSource,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -102,7 +109,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Actions & Statut & Bouton Hamburger */}
             <div className="flex items-center gap-2 sm:gap-3">
               {/* Mode status badge */}
-              <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+              <div
+                className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 cursor-help"
+                title={`Donnée : ${formatDataDateTime(dataTimestamp, true)} | Récupérée : ${formatDataDateTime(retrievedAt || lastUpdated, false)} | Source : ${dataSource || (isDemoFallback ? 'Référence locale' : 'API Temps Réel')}`}
+              >
                 <span
                   className={`w-2 h-2 rounded-full ${isDemoFallback ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'}`}
                 />
@@ -186,6 +196,9 @@ export const Navbar: React.FC<NavbarProps> = ({
         onNavigate={onNavigate}
         isDemoFallback={isDemoFallback}
         lastUpdated={lastUpdated}
+        dataTimestamp={dataTimestamp}
+        retrievedAt={retrievedAt}
+        dataSource={dataSource}
         secondsUntilRefresh={secondsUntilRefresh}
         onManualRefresh={onManualRefresh}
         isRefreshing={isRefreshing}

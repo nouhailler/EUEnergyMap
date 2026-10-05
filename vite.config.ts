@@ -32,7 +32,8 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,json,geojson}'],
+          navigateFallbackDenylist: [/^\/api/, /^\/data/],
           runtimeCaching: [
             {
               urlPattern: /^\/api\/electricity-maps\/.*/i,
@@ -43,6 +44,16 @@ export default defineConfig(() => {
                   maxEntries: 100,
                   maxAgeSeconds: 60 * 60 * 2, // 2 hours
                 },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+            {
+              urlPattern: /^\/data\/.*/i,
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'geojson-cache',
                 cacheableResponse: {
                   statuses: [0, 200],
                 },

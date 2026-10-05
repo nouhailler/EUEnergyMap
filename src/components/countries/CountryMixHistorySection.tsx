@@ -38,6 +38,7 @@ import {
 } from '../../types/energy';
 import { PRODUCTION_SOURCES } from '../../data/sourcesMeta';
 import { emapsClient } from '../../services/electricityMaps/client';
+import { DataProvenanceBanner } from '../common/DataProvenanceBanner';
 
 interface CountryMixHistorySectionProps {
   snapshot: CountryElectricitySnapshot;
@@ -481,6 +482,14 @@ export const CountryMixHistorySection: React.FC<CountryMixHistorySectionProps> =
               Conformément à la règle <strong>« Zéro donnée inventée »</strong>, aucune courbe artificielle n'est simulée. Seule la décomposition réelle certifiée du mix de production instantané est affichée.
             </p>
           </div>
+          <div className="pt-2 flex justify-center">
+            <DataProvenanceBanner
+              dataTimestamp={snapshot.dataTimestamp || snapshot.datetime}
+              retrievedAt={snapshot.retrievedAt || snapshot.updatedAt}
+              source={snapshot.source}
+              variant="inline"
+            />
+          </div>
         </div>
       ) : (
         <div className="p-4 rounded-xl bg-slate-50/90 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-700/80 space-y-3 font-mono">
@@ -593,8 +602,14 @@ export const CountryMixHistorySection: React.FC<CountryMixHistorySectionProps> =
             <p className="text-xs text-slate-500 font-medium">Chargement de l'historique du mix électrique 24h...</p>
           </div>
         ) : chartData.length === 0 ? (
-          <div className="h-full flex items-center justify-center rounded-2xl bg-slate-50 dark:bg-slate-900/40 text-xs text-slate-400 italic">
-            Aucun historique de mix disponible pour cette zone.
+          <div className="h-full flex flex-col items-center justify-center rounded-2xl bg-slate-50 dark:bg-slate-900/40 p-6 text-center space-y-2">
+            <p className="text-xs text-slate-400 italic">Aucun historique de mix disponible pour cette zone.</p>
+            <DataProvenanceBanner
+              dataTimestamp={snapshot.dataTimestamp || snapshot.datetime}
+              retrievedAt={snapshot.retrievedAt || snapshot.updatedAt}
+              source={snapshot.source}
+              variant="inline"
+            />
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%" minWidth={300} minHeight={280}>

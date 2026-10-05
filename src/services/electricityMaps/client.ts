@@ -6,8 +6,12 @@ const IN_FLIGHT_PROMISES = new Map<string, Promise<unknown>>();
 
 function sanitizeSnapshot(s: CountryElectricitySnapshot): CountryElectricitySnapshot {
   if (!s) return s;
+  const isReference = s.datetime?.startsWith('2024') || !s.source || s.source.includes('Référence');
   return {
     ...s,
+    dataTimestamp: s.dataTimestamp || s.datetime,
+    retrievedAt: s.retrievedAt || s.updatedAt || new Date().toISOString(),
+    source: s.source || (isReference ? 'Référence locale' : 'Electricity Maps API (Live)'),
     exchangeFlows: Array.isArray(s.exchangeFlows) ? s.exchangeFlows : [],
     productionBreakdown: s.productionBreakdown || {
       nuclear: null,
@@ -31,9 +35,15 @@ function sanitizeSummary(res: EUSummaryResponse): EUSummaryResponse {
   for (const [code, s] of Object.entries(res.snapshots)) {
     sanitizedSnapshots[code] = sanitizeSnapshot(s);
   }
+  const refDate = sanitizedSnapshots['FR']?.dataTimestamp || sanitizedSnapshots['FR']?.datetime || '2024-03-24T12:00:00.000Z';
+  const retrievedAt = res.retrievedAt || res.timestamp || new Date().toISOString();
   return {
     ...res,
     snapshots: sanitizedSnapshots,
+    dataTimestamp: res.dataTimestamp || refDate,
+    retrievedAt,
+    source: res.source || (res.isDemoFallback ? 'Référence locale' : 'Electricity Maps API (Live)'),
+    timestamp: res.timestamp || retrievedAt,
   };
 }
 
@@ -41,6 +51,8 @@ export interface EUSummaryResponse {
   snapshots: Record<string, CountryElectricitySnapshot>;
   isDemoFallback: boolean;
   source: string;
+  dataTimestamp?: string;
+  retrievedAt?: string;
   timestamp: string;
 }
 
@@ -177,6 +189,9 @@ export class ElectricityMapsClient {
             granularity,
             history: data.history,
             isDemoFallback: Boolean(data.isDemoFallback),
+            dataTimestamp: data.dataTimestamp,
+            retrievedAt: data.retrievedAt,
+            source: data.source,
           };
           clientCache.set(cacheKey, result, 15 * 60 * 1000);
           return result;
@@ -189,6 +204,9 @@ export class ElectricityMapsClient {
             isUnavailable: true,
             message: data.message || "Donnée historique indisponible (aucune courbe synthétique n'est générée)",
             lastKnown: data.lastKnown,
+            dataTimestamp: data.dataTimestamp,
+            retrievedAt: data.retrievedAt,
+            source: data.source || 'Référence locale',
           };
           clientCache.set(cacheKey, result, 15 * 60 * 1000);
           return result;
@@ -200,6 +218,8 @@ export class ElectricityMapsClient {
 
     const snapshot = EU_REFERENCE_SNAPSHOTS[zoneKey];
     const lastKnown = getLastKnownObservation(snapshot);
+    const dataTimestamp = lastKnown?.datetime || snapshot?.datetime || '2024-03-24T12:00:00.000Z';
+    const retrievedAt = new Date().toISOString();
     const result: CountryHistoryData = {
       zoneKey,
       granularity,
@@ -207,6 +227,9 @@ export class ElectricityMapsClient {
       isUnavailable: true,
       message: "Donnée historique indisponible (aucune courbe synthétique n'est générée)",
       lastKnown,
+      dataTimestamp,
+      retrievedAt,
+      source: 'Référence locale',
     };
     clientCache.set(cacheKey, result, 15 * 60 * 1000);
     return result;
@@ -236,6 +259,9 @@ export class ElectricityMapsClient {
             granularity,
             points: data.points,
             isDemoFallback: Boolean(data.isDemoFallback),
+            dataTimestamp: data.dataTimestamp,
+            retrievedAt: data.retrievedAt,
+            source: data.source,
           };
           clientCache.set(cacheKey, result, 15 * 60 * 1000);
           return result;
@@ -248,6 +274,9 @@ export class ElectricityMapsClient {
             isUnavailable: true,
             message: data.message || "Donnée historique 24h indisponible (aucune courbe synthétique n'est générée)",
             lastKnown: data.lastKnown,
+            dataTimestamp: data.dataTimestamp,
+            retrievedAt: data.retrievedAt,
+            source: data.source || 'Référence locale',
           };
           clientCache.set(cacheKey, result, 15 * 60 * 1000);
           return result;
@@ -259,6 +288,8 @@ export class ElectricityMapsClient {
 
     const snapshot = EU_REFERENCE_SNAPSHOTS[zoneKey];
     const lastKnown = getLastKnownObservation(snapshot);
+    const dataTimestamp = lastKnown?.datetime || snapshot?.datetime || '2024-03-24T12:00:00.000Z';
+    const retrievedAt = new Date().toISOString();
     const result: TimelineData = {
       zoneKey,
       granularity,
@@ -266,6 +297,9 @@ export class ElectricityMapsClient {
       isUnavailable: true,
       message: "Donnée historique 24h indisponible (aucune courbe synthétique n'est générée)",
       lastKnown,
+      dataTimestamp,
+      retrievedAt,
+      source: 'Référence locale',
     };
     clientCache.set(cacheKey, result, 15 * 60 * 1000);
     return result;
@@ -295,6 +329,9 @@ export class ElectricityMapsClient {
             points: data.points,
             isDemoFallback: Boolean(data.isDemoFallback),
             timestamp: data.timestamp,
+            dataTimestamp: data.dataTimestamp,
+            retrievedAt: data.retrievedAt,
+            source: data.source,
           };
           clientCache.set(cacheKey, result, 15 * 60 * 1000);
           return result;
@@ -307,6 +344,9 @@ export class ElectricityMapsClient {
             isUnavailable: true,
             message: data.message || "Historique du mix 24h indisponible (aucune courbe synthétique n'est générée)",
             lastKnown: data.lastKnown,
+            dataTimestamp: data.dataTimestamp,
+            retrievedAt: data.retrievedAt,
+            source: data.source || 'Référence locale',
           };
           clientCache.set(cacheKey, result, 15 * 60 * 1000);
           return result;
@@ -318,6 +358,8 @@ export class ElectricityMapsClient {
 
     const snapshot = EU_REFERENCE_SNAPSHOTS[zoneKey];
     const lastKnown = getLastKnownObservation(snapshot);
+    const dataTimestamp = lastKnown?.datetime || snapshot?.datetime || '2024-03-24T12:00:00.000Z';
+    const retrievedAt = new Date().toISOString();
     const result: MixHistoryData = {
       zoneKey,
       granularity,
@@ -325,6 +367,9 @@ export class ElectricityMapsClient {
       isUnavailable: true,
       message: "Historique du mix 24h indisponible (aucune courbe synthétique n'est générée)",
       lastKnown,
+      dataTimestamp,
+      retrievedAt,
+      source: 'Référence locale',
     };
     clientCache.set(cacheKey, result, 15 * 60 * 1000);
     return result;
@@ -370,6 +415,9 @@ export class ElectricityMapsClient {
             interconnectors: Array.isArray(data.interconnectors) && data.interconnectors.length > 0 ? data.interconnectors : defaultInterconnectors,
             isDemoFallback: Boolean(data.isDemoFallback),
             timestamp: data.timestamp,
+            dataTimestamp: data.dataTimestamp,
+            retrievedAt: data.retrievedAt,
+            source: data.source,
           };
           clientCache.set(cacheKey, result, 15 * 60 * 1000);
           return result;
@@ -383,6 +431,9 @@ export class ElectricityMapsClient {
             isUnavailable: true,
             message: data.message || "Historique des flux 24h indisponible (aucune courbe synthétique n'est générée)",
             lastKnown: data.lastKnown,
+            dataTimestamp: data.dataTimestamp,
+            retrievedAt: data.retrievedAt,
+            source: data.source || 'Référence locale',
           };
           clientCache.set(cacheKey, result, 15 * 60 * 1000);
           return result;
@@ -393,6 +444,8 @@ export class ElectricityMapsClient {
     }
 
     const lastKnown = getLastKnownObservation(snapshot);
+    const dataTimestamp = lastKnown?.datetime || snapshot?.datetime || '2024-03-24T12:00:00.000Z';
+    const retrievedAt = new Date().toISOString();
     const result: FlowsHistoryData = {
       zoneKey,
       granularity,
@@ -401,6 +454,9 @@ export class ElectricityMapsClient {
       isUnavailable: true,
       message: "Historique des flux 24h indisponible (aucune courbe synthétique n'est générée)",
       lastKnown,
+      dataTimestamp,
+      retrievedAt,
+      source: 'Référence locale',
     };
     clientCache.set(cacheKey, result, 15 * 60 * 1000);
     return result;

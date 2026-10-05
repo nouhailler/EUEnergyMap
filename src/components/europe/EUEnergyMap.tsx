@@ -8,6 +8,7 @@ import {
 } from '../../types/energy';
 import { EU_COUNTRIES, EUCountryConfig } from '../../data/euCountries';
 import { PRODUCTION_SOURCES } from '../../data/sourcesMeta';
+import { EUROPE_GEOJSON } from '../../services/map/europeGeojson';
 import {
   RotateCcw,
   Search,
@@ -28,7 +29,7 @@ interface EUEnergyMapProps {
   onSelectCountry: (countryCode: string) => void;
 }
 
-type TileLayerTheme = 'positron' | 'dark' | 'osm' | 'none';
+type TileLayerTheme = 'osm' | 'dark' | 'none';
 
 export const EUEnergyMap: React.FC<EUEnergyMapProps> = ({
   snapshots,
@@ -42,10 +43,11 @@ export const EUEnergyMap: React.FC<EUEnergyMapProps> = ({
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
 
-  const [geojsonData, setGeojsonData] = useState<any | null>(null);
-  const [isLoadingGeo, setIsLoadingGeo] = useState<boolean>(true);
+  // Le GeoJSON officiel est immédiatement disponible sans dépendance réseau
+  const [geojsonData, setGeojsonData] = useState<any | null>(EUROPE_GEOJSON);
+  const [isLoadingGeo, setIsLoadingGeo] = useState<boolean>(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [selectedTileTheme, setSelectedTileTheme] = useState<TileLayerTheme>('positron');
+  const [selectedTileTheme, setSelectedTileTheme] = useState<TileLayerTheme>('osm');
   const [showLabels, setShowLabels] = useState<boolean>(true);
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -189,29 +191,36 @@ export const EUEnergyMap: React.FC<EUEnergyMapProps> = ({
     [snapshots, selectedIndicator, getPrimarySource],
   );
 
-  // Chargement asynchrone du GeoJSON européen
+  // Validation et mise à disposition garantie du GeoJSON européen
   useEffect(() => {
-    let isCancelled = false;
-    setIsLoadingGeo(true);
-    setLoadError(null);
+    // Si déjà injecté via l'import statique EUROPE_GEOJSON, ne rien faire
+    if (geojsonData && geojsonData.features?.length > 0) {
+      setIsLoadingGeo(false);
+      return;
+    }
 
+    let isCancelled = false;
+    // Si besoin d'un rechargement défensif
     fetch('/data/europe.geojson')
       .then((res) => {
-        if (!res.ok) {
-          throw new Error(`Échec du chargement du fichier GeoJSON (Code ${res.status})`);
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const ct = res.headers.get('content-type') || '';
+        if (!ct.includes('json') && !ct.includes('geo')) {
+          // Si une page HTML est retournée (ex. SPA catchall), utiliser directement le fallback interne
+          return EUROPE_GEOJSON;
         }
         return res.json();
       })
       .then((data) => {
-        if (!isCancelled) {
+        if (!isCancelled && data && data.features) {
           setGeojsonData(data);
           setIsLoadingGeo(false);
         }
       })
-      .catch((err) => {
+      .catch(() => {
+        // En cas d'échec réseau, repli silencieux et immédiat sur EUROPE_GEOJSON
         if (!isCancelled) {
-          console.error('[EUEnergyMap] Erreur de chargement GeoJSON:', err);
-          setLoadError(err.message || 'Impossible de charger la carte');
+          setGeojsonData(EUROPE_GEOJSON);
           setIsLoadingGeo(false);
         }
       });
@@ -219,7 +228,7 @@ export const EUEnergyMap: React.FC<EUEnergyMapProps> = ({
     return () => {
       isCancelled = true;
     };
-  }, []);
+  }, [geojsonData]);
 
   // Initialisation de la carte Leaflet
   useEffect(() => {
@@ -261,13 +270,13 @@ export const EUEnergyMap: React.FC<EUEnergyMapProps> = ({
     // Ajout des contrôles de zoom en haut à gauche
     L.control.zoom({ position: 'topleft' }).addTo(map);
 
-    // Attribution discrète en bas à droite
+    // Attribution discrète OpenStreetMap en bas à droite (100% libre et sans clé API)
     L.control
       .attribution({
         position: 'bottomright',
         prefix: false,
       })
-      .addAttribution('© OpenStreetMap, CartoDB, Electricity Maps')
+      .addAttribution('&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributeurs')
       .addTo(map);
 
     mapInstanceRef.current = map;
@@ -285,7 +294,7 @@ export const EUEnergyMap: React.FC<EUEnergyMapProps> = ({
     };
   }, []);
 
-  // Gestion du fond de carte (TileLayer)
+  // Gestion du fond de carte OpenStreetMap (TileLayer)
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -299,31 +308,13 @@ export const EUEnergyMap: React.FC<EUEnergyMapProps> = ({
       return;
     }
 
-    let tileUrl = '/api/carto/tiles/light_all/{z}/{x}/{y}.png';
-    let maxZoom = 19;
-
-    if (selectedTileTheme === 'dark') {
-      tileUrl = '/api/carto/tiles/dark_all/{z}/{x}/{y}.png';
-    } else if (selectedTileTheme === 'osm') {
-      tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-    }
-
-    const tileLayer = L.tileLayer(tileUrl, {
-      subdomains: 'abc',
-      maxZoom,
-      opacity: 0.9,
-    });
-
-    // En cas d'erreur de chargement sur CARTO, repli automatique immédiat sur OpenStreetMap
-    tileLayer.on('tileerror', (errorEvent: any) => {
-      if (errorEvent?.tile && !errorEvent.tile.dataset?.fallbackTried) {
-        errorEvent.tile.dataset = errorEvent.tile.dataset || {};
-        errorEvent.tile.dataset.fallbackTried = 'true';
-        const coords = errorEvent.coords;
-        if (coords) {
-          errorEvent.tile.src = `https://tile.openstreetmap.org/${coords.z}/${coords.x}/${coords.y}.png`;
-        }
-      }
+    // Fond OpenStreetMap officiel et universel (100% gratuit, aucun compte ni clé API requis)
+    const isDark = selectedTileTheme === 'dark';
+    const tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      opacity: isDark ? 0.92 : 0.85,
+      className: isDark ? 'osm-dark-tiles' : 'osm-light-tiles',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributeurs',
     });
 
     tileLayer.addTo(map);
@@ -625,18 +616,18 @@ export const EUEnergyMap: React.FC<EUEnergyMapProps> = ({
             </select>
           </div>
 
-          {/* Sélecteur de style de fond cartographique */}
+          {/* Sélecteur de style de fond cartographique OpenStreetMap */}
           <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900/80 p-1 rounded-lg border border-slate-200 dark:border-slate-700/80 text-xs">
             <button
-              onClick={() => setSelectedTileTheme('positron')}
+              onClick={() => setSelectedTileTheme('osm')}
               className={`px-2 py-1 rounded-md font-medium transition cursor-pointer ${
-                selectedTileTheme === 'positron'
+                selectedTileTheme === 'osm'
                   ? 'bg-white dark:bg-slate-800 text-sky-700 dark:text-sky-300 shadow-2xs font-semibold'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
-              title="Fond clair détaillé (CartoDB Positron)"
+              title="Fond OpenStreetMap standard (100% libre, aucune clé API)"
             >
-              Clair
+              Clair (OSM)
             </button>
             <button
               onClick={() => setSelectedTileTheme('dark')}
@@ -645,7 +636,7 @@ export const EUEnergyMap: React.FC<EUEnergyMapProps> = ({
                   ? 'bg-white dark:bg-slate-800 text-sky-700 dark:text-sky-300 shadow-2xs font-semibold'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
-              title="Fond sombre moderne (CartoDB Dark)"
+              title="Fond OpenStreetMap mode sombre"
             >
               Sombre
             </button>
@@ -710,19 +701,6 @@ export const EUEnergyMap: React.FC<EUEnergyMapProps> = ({
           <div className="absolute inset-0 z-20 bg-slate-900/40 backdrop-blur-xs flex flex-col items-center justify-center text-white">
             <div className="w-8 h-8 border-3 border-sky-400 border-t-transparent rounded-full animate-spin mb-2" />
             <span className="text-xs font-semibold">Chargement des frontières géographiques de l'Europe...</span>
-          </div>
-        )}
-
-        {/* Message d'erreur de chargement */}
-        {loadError && (
-          <div className="absolute top-4 left-4 right-4 z-20 p-3 bg-rose-50 dark:bg-rose-950/80 border border-rose-300 dark:border-rose-800 rounded-xl text-xs text-rose-800 dark:text-rose-200 flex items-center justify-between">
-            <span>{loadError}</span>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-2 py-1 rounded bg-rose-600 text-white font-medium hover:bg-rose-700"
-            >
-              Recharger
-            </button>
           </div>
         )}
 

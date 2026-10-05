@@ -36,6 +36,7 @@ import {
   GRANULARITY_OPTIONS,
 } from '../../types/energy';
 import { emapsClient } from '../../services/electricityMaps/client';
+import { DataProvenanceBanner } from '../common/DataProvenanceBanner';
 
 interface CountryFlowsHistorySectionProps {
   snapshot: CountryElectricitySnapshot;
@@ -352,6 +353,14 @@ export const CountryFlowsHistorySection: React.FC<CountryFlowsHistorySectionProp
               Conformément à la règle <strong>« Zéro donnée inventée »</strong>, aucune courbe artificielle n'est simulée. Seuls les flux physiques instantanés certifiés avec chaque pays voisin sont restitués.
             </p>
           </div>
+          <div className="pt-2 flex justify-center">
+            <DataProvenanceBanner
+              dataTimestamp={snapshot.dataTimestamp || snapshot.datetime}
+              retrievedAt={snapshot.retrievedAt || snapshot.updatedAt}
+              source={snapshot.source}
+              variant="inline"
+            />
+          </div>
         </div>
       ) : (
         <>
@@ -449,8 +458,14 @@ export const CountryFlowsHistorySection: React.FC<CountryFlowsHistorySectionProp
             <p className="text-xs text-slate-500 font-medium">Chargement de l'historique des flux 24h...</p>
           </div>
         ) : chartData.length === 0 ? (
-          <div className="h-full flex items-center justify-center rounded-2xl bg-slate-50 dark:bg-slate-900/40 text-xs text-slate-400 italic">
-            Aucun historique de flux disponible pour cette frontière.
+          <div className="h-full flex flex-col items-center justify-center rounded-2xl bg-slate-50 dark:bg-slate-900/40 p-6 text-center space-y-2">
+            <p className="text-xs text-slate-400 italic">Aucun historique de flux disponible pour cette frontière.</p>
+            <DataProvenanceBanner
+              dataTimestamp={snapshot.dataTimestamp || snapshot.datetime}
+              retrievedAt={snapshot.retrievedAt || snapshot.updatedAt}
+              source={snapshot.source}
+              variant="inline"
+            />
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%" minWidth={300} minHeight={240}>

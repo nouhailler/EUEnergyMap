@@ -18,6 +18,7 @@ import { CountryElectricitySnapshot, ProductionSourceKey } from '../../types/ene
 import { PRODUCTION_SOURCES } from '../../data/sourcesMeta';
 import { UnitFormattedValue } from '../common/UnitFormattedValue';
 import { DataQualityBadge } from '../common/DataQualityBadge';
+import { DataProvenanceBanner, formatDataDateTime } from '../common/DataProvenanceBanner';
 import { CountryHistorySection } from './CountryHistorySection';
 import { CountryMixHistorySection } from './CountryMixHistorySection';
 import { CountryFlowsHistorySection } from '../flows/CountryFlowsHistorySection';
@@ -91,9 +92,14 @@ export const CountryDetailView: React.FC<CountryDetailViewProps> = ({
                 Zone : {snapshot.zoneKey}
               </span>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Relevé du {new Date(snapshot.datetime).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} à {new Date(snapshot.datetime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} UTC
-            </p>
+            <div className="mt-1">
+              <DataProvenanceBanner
+                dataTimestamp={snapshot.dataTimestamp || snapshot.datetime}
+                retrievedAt={snapshot.retrievedAt || snapshot.updatedAt}
+                source={snapshot.source}
+                variant="inline"
+              />
+            </div>
           </div>
         </div>
 
@@ -811,10 +817,28 @@ export const CountryDetailView: React.FC<CountryDetailViewProps> = ({
           </div>
 
           {/* Données techniques et qualité */}
-          <div className="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl border border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 space-y-1">
+          <div className="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl border border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 space-y-1.5">
             <div className="flex justify-between">
               <span>Code zone :</span>
               <span className="font-mono text-slate-700 dark:text-slate-300">{snapshot.zoneKey}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Donnée observée :</span>
+              <span className="font-mono text-slate-700 dark:text-slate-300">
+                {formatDataDateTime(snapshot.dataTimestamp || snapshot.datetime, true)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Récupérée le :</span>
+              <span className="font-mono text-slate-700 dark:text-slate-300">
+                {formatDataDateTime(snapshot.retrievedAt || snapshot.updatedAt, false)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Source :</span>
+              <span className="font-semibold text-slate-800 dark:text-slate-200">
+                {snapshot.source || 'Référence locale'}
+              </span>
             </div>
             <div className="flex justify-between">
               <span>Mesure :</span>
@@ -826,12 +850,6 @@ export const CountryDetailView: React.FC<CountryDetailViewProps> = ({
                 <span>{snapshot.estimationMethod}</span>
               </div>
             )}
-            <div className="flex justify-between">
-              <span>Dernière synchro :</span>
-              <span className="font-mono">
-                {new Date(snapshot.updatedAt).toLocaleTimeString('fr-FR')}
-              </span>
-            </div>
           </div>
         </div>
       </div>

@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { EU_COUNTRIES } from '../../data/euCountries';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
+import { DataProvenanceBanner } from './DataProvenanceBanner';
 
 interface CategoryItem {
   id: string;
@@ -45,6 +46,9 @@ interface HamburgerMenuProps {
   onNavigate: (view: string, param?: string) => void;
   isDemoFallback: boolean;
   lastUpdated: string | null;
+  dataTimestamp?: string | null;
+  retrievedAt?: string | null;
+  dataSource?: string | null;
   secondsUntilRefresh: number;
   onManualRefresh: () => void;
   isRefreshing: boolean;
@@ -57,6 +61,9 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
   onNavigate,
   isDemoFallback,
   lastUpdated,
+  dataTimestamp,
+  retrievedAt,
+  dataSource,
   secondsUntilRefresh,
   onManualRefresh,
   isRefreshing,
@@ -246,6 +253,14 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                 <span>Actualiser</span>
               </button>
             </div>
+
+            {/* Traçabilité Donnée / Récupérée / Source */}
+            <DataProvenanceBanner
+              dataTimestamp={dataTimestamp}
+              retrievedAt={retrievedAt || lastUpdated}
+              source={dataSource || (isDemoFallback ? 'Référence locale' : 'Electricity Maps API (Live)')}
+              variant="panel"
+            />
 
             {/* Catégories de fonctionnalités */}
             {categories.map((category) => (

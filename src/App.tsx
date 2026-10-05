@@ -19,6 +19,7 @@ import { DayTimelineView } from './components/timeline/DayTimelineView';
 import { Footer } from './components/common/Footer';
 import { OfflineIndicator } from './components/common/OfflineIndicator';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { DataProvenanceBanner } from './components/common/DataProvenanceBanner';
 
 const POLLING_INTERVAL_SECONDS = 300; // 5 minutes
 
@@ -32,6 +33,9 @@ export default function App() {
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isDemoFallback, setIsDemoFallback] = useState<boolean>(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [dataTimestamp, setDataTimestamp] = useState<string | null>(null);
+  const [retrievedAt, setRetrievedAt] = useState<string | null>(null);
+  const [dataSource, setDataSource] = useState<string>('Référence locale');
 
   const [secondsUntilRefresh, setSecondsUntilRefresh] = useState<number>(POLLING_INTERVAL_SECONDS);
 
@@ -88,7 +92,10 @@ export default function App() {
       const res: EUSummaryResponse = await emapsClient.getEUSummary(force);
       setSnapshots(res.snapshots);
       setIsDemoFallback(res.isDemoFallback);
-      setLastUpdated(res.timestamp);
+      setLastUpdated(res.retrievedAt || res.timestamp);
+      setDataTimestamp(res.dataTimestamp || res.snapshots['FR']?.dataTimestamp || res.snapshots['FR']?.datetime || '2024-03-24T12:00:00.000Z');
+      setRetrievedAt(res.retrievedAt || res.timestamp || new Date().toISOString());
+      setDataSource(res.source || (res.isDemoFallback ? 'Référence locale' : 'Electricity Maps API (Live)'));
       setSecondsUntilRefresh(POLLING_INTERVAL_SECONDS);
     } catch (err) {
       console.error('Erreur de chargement des données:', err);
@@ -131,6 +138,9 @@ export default function App() {
         isRefreshing={isRefreshing}
         isDemoFallback={isDemoFallback}
         lastUpdated={lastUpdated}
+        dataTimestamp={dataTimestamp}
+        retrievedAt={retrievedAt}
+        dataSource={dataSource}
       />
 
       {/* Contenu principal */}
@@ -148,6 +158,31 @@ export default function App() {
             {/* Vue Dashboard : Carte + Synthèse + Tableau */}
             {currentView === 'dashboard' && (
               <div className="space-y-6">
+                {/* Bandeau d'intégrité et de traçabilité certifiée : Donnée vs Récupérée vs Source */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 shadow-xs">
+                  <div className="flex items-center gap-2.5">
+                    <span
+                      className={`w-2.5 h-2.5 rounded-full ${
+                        isDemoFallback ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'
+                      }`}
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                        {isDemoFallback ? 'Jeu de données de secours certifié' : 'Données API Réseau en direct'}
+                      </span>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400 block -mt-0.5">
+                        Consolidation européenne des 27 réseaux interconnectés
+                      </span>
+                    </div>
+                  </div>
+                  <DataProvenanceBanner
+                    dataTimestamp={dataTimestamp}
+                    retrievedAt={retrievedAt}
+                    source={dataSource}
+                    variant="inline"
+                  />
+                </div>
+
                 <EUSummaryCards
                   averageCarbonIntensity={euSummary.averageCarbonIntensity}
                   totalConsumptionMW={euSummary.totalConsumptionMW}

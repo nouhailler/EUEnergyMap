@@ -57,3 +57,13 @@
 .leaflet-custom-tooltip::before {
   display: none !important;
 }
+
+/* Styles pour les tuiles OpenStreetMap (100% libre et sans clé API) */
+.osm-dark-tiles {
+  filter: brightness(0.55) invert(1) contrast(2.6) hue-rotate(195deg) saturate(0.3) !important;
+}
+
+.osm-light-tiles {
+  filter: saturate(0.85) contrast(0.98) brightness(1.02);
+}
+
