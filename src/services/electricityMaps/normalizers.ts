@@ -723,16 +723,30 @@ export function normalizeCountrySnapshot(
 }
 
 /**
- * Calcule la synthèse de l'UE à partir d'une collection d'instantanés
+ * Calcule la synthèse de l'UE à partir d'une collection d'instantanés.
+ *
+ * Principes physiques et mathématiques :
+ * 1. Intensité Carbone moyenne (averageCarbonIntensity) :
+ *    Pondérée par la demande / charge appelée de chaque pays (MWh/MW).
+ * 2. Parts Renouvelable (averageRenewableShare) et Sans Fossile (averageFossilFreeShare) :
+ *    Calculées directement à partir des mégawatts (MW) agrégés sur l'ensemble de l'Union européenne :
+ *      - Part Renouvelable UE = (Production renouvelable totale UE en MW) / (Production électrique totale UE en MW)
+ *      - Part Sans Fossile UE = (Production décarbonée totale UE en MW) / (Production électrique totale UE en MW)
+ *    Ceci reflète fidèlement la réalité physique et évite le biais d'une moyenne arithmétique simple non pondérée
+ *    (ex. France 80 % et Malte 20 % donnant faussement 50 %).
  */
 export function computeEUSummary(snapshots: Record<string, CountryElectricitySnapshot>) {
-  const validSnapshots = Object.values(snapshots || {}).filter((s) => s && s.carbonIntensity !== null);
+  const validSnapshots = Object.values(snapshots || {}).filter(
+    (s) => s && (s.carbonIntensity !== null || s.totalProduction !== null || s.totalConsumption !== null)
+  );
 
   if (validSnapshots.length === 0) {
     return {
       averageCarbonIntensity: null,
       totalProductionMW: null,
       totalConsumptionMW: null,
+      totalRenewableProductionMW: null,
+      totalFossilFreeProductionMW: null,
       averageRenewableShare: null,
       averageFossilFreeShare: null,
       coveredCountriesCount: 0,
@@ -740,40 +754,148 @@ export function computeEUSummary(snapshots: Record<string, CountryElectricitySna
   }
 
   let totalConsumption = 0;
+  let totalCarbonLoadWeight = 0;
   let weightedCarbonSum = 0;
-  let totalProd = 0;
-  let renewableSum = 0;
-  let fossilFreeSum = 0;
-  let renewableCount = 0;
-  let fossilFreeCount = 0;
+
+  let totalProdMW = 0;
+  let totalRenewableMW = 0;
+  let totalFossilFreeMW = 0;
+  let prodWeightForRenewable = 0;
+  let prodWeightForFossilFree = 0;
+
+  // Secours arithmétique si aucune donnée de puissance (MW) n'est disponible
+  let fallbackRenewableSum = 0;
+  let fallbackRenewableCount = 0;
+  let fallbackFossilFreeSum = 0;
+  let fallbackFossilFreeCount = 0;
 
   for (const s of validSnapshots) {
-    const load = s.totalConsumption || s.totalProduction || 1000;
-    if (s.carbonIntensity !== null) {
-      weightedCarbonSum += s.carbonIntensity * load;
+    // 1. Charge et intensité carbone pondérée par la consommation
+    const load = s.totalConsumption || s.totalProduction || s.reportedLoad || 0;
+    if (s.totalConsumption !== null && s.totalConsumption > 0) {
+      totalConsumption += s.totalConsumption;
+    } else if (load > 0) {
       totalConsumption += load;
     }
-    if (s.totalProduction !== null) {
-      totalProd += s.totalProduction;
+
+    if (s.carbonIntensity !== null && load > 0) {
+      weightedCarbonSum += s.carbonIntensity * load;
+      totalCarbonLoadWeight += load;
     }
+
+    // 2. Détermination de la production et des composantes renouvelables / bas-carbone (en MW)
+    let countryProdMW: number | null = null;
+    let countryRenMW: number | null = null;
+    let countryFfMW: number | null = null;
+
+    const pb = s.productionBreakdown;
+    const hasBreakdown = pb && Object.values(pb).some((v) => v !== null && v !== undefined && v > 0);
+
+    if (hasBreakdown) {
+      const renFromPb =
+        (pb.hydro ?? 0) +
+        (pb.wind ?? 0) +
+        (pb.solar ?? 0) +
+        (pb.biomass ?? 0) +
+        (pb.geothermal ?? 0);
+      const nucFromPb = pb.nuclear ?? 0;
+      const ffFromPb = renFromPb + nucFromPb;
+      const sumPb = Object.values(pb).reduce((acc: number, v) => acc + (v ?? 0), 0);
+
+      if (s.totalProduction !== null && s.totalProduction > 0) {
+        countryProdMW = s.totalProduction;
+        // Répartition proportionnelle si totalProduction et breakdown diffèrent légèrement (ex: pompage/pertes)
+        if (sumPb > 0) {
+          countryRenMW = Math.round((renFromPb / sumPb) * countryProdMW);
+          countryFfMW = Math.round((ffFromPb / sumPb) * countryProdMW);
+        } else {
+          countryRenMW = renFromPb;
+          countryFfMW = ffFromPb;
+        }
+      } else if (sumPb > 0) {
+        countryProdMW = sumPb;
+        countryRenMW = renFromPb;
+        countryFfMW = ffFromPb;
+      }
+    }
+
+    // Si le détail par filière n'est pas disponible en MW, dériver des pourcentages officiels appliqués aux MW
+    if (countryProdMW === null) {
+      if (s.totalProduction !== null && s.totalProduction > 0) {
+        countryProdMW = s.totalProduction;
+      } else if (s.totalConsumption !== null && s.totalConsumption > 0) {
+        countryProdMW = s.totalConsumption;
+      } else if (s.reportedLoad !== null && s.reportedLoad > 0) {
+        countryProdMW = s.reportedLoad;
+      }
+    }
+
+    if (countryRenMW === null && countryProdMW !== null && s.renewablePercentage !== null) {
+      countryRenMW = Math.round((s.renewablePercentage / 100) * countryProdMW);
+    }
+
+    if (countryFfMW === null && countryProdMW !== null && s.fossilFreePercentage !== null) {
+      countryFfMW = Math.round((s.fossilFreePercentage / 100) * countryProdMW);
+    }
+
+    // Agrégation européenne
+    if (countryProdMW !== null && countryProdMW > 0) {
+      totalProdMW += countryProdMW;
+
+      if (countryRenMW !== null) {
+        totalRenewableMW += countryRenMW;
+        prodWeightForRenewable += countryProdMW;
+      }
+
+      if (countryFfMW !== null) {
+        totalFossilFreeMW += countryFfMW;
+        prodWeightForFossilFree += countryProdMW;
+      }
+    }
+
+    // Statistiques de secours
     if (s.renewablePercentage !== null) {
-      renewableSum += s.renewablePercentage;
-      renewableCount++;
+      fallbackRenewableSum += s.renewablePercentage;
+      fallbackRenewableCount++;
     }
     if (s.fossilFreePercentage !== null) {
-      fossilFreeSum += s.fossilFreePercentage;
-      fossilFreeCount++;
+      fallbackFossilFreeSum += s.fossilFreePercentage;
+      fallbackFossilFreeCount++;
     }
   }
 
-  const averageCarbonIntensity = totalConsumption > 0 ? Math.round(weightedCarbonSum / totalConsumption) : null;
-  const averageRenewableShare = renewableCount > 0 ? Math.round(renewableSum / renewableCount) : null;
-  const averageFossilFreeShare = fossilFreeCount > 0 ? Math.round(fossilFreeSum / fossilFreeCount) : null;
+  // 1. Intensité Carbone moyenne pondérée par la charge
+  const averageCarbonIntensity =
+    totalCarbonLoadWeight > 0 ? Math.round(weightedCarbonSum / totalCarbonLoadWeight) : null;
+
+  // 2. Part Renouvelable européenne : Production renouvelable totale UE / Production électrique totale UE
+  let averageRenewableShare: number | null = null;
+  if (prodWeightForRenewable > 0) {
+    averageRenewableShare = Math.min(
+      100,
+      Math.max(0, Math.round((totalRenewableMW / prodWeightForRenewable) * 100))
+    );
+  } else if (fallbackRenewableCount > 0) {
+    averageRenewableShare = Math.round(fallbackRenewableSum / fallbackRenewableCount);
+  }
+
+  // 3. Part Décarbonée européenne : Production décarbonée totale UE / Production électrique totale UE
+  let averageFossilFreeShare: number | null = null;
+  if (prodWeightForFossilFree > 0) {
+    averageFossilFreeShare = Math.min(
+      100,
+      Math.max(0, Math.round((totalFossilFreeMW / prodWeightForFossilFree) * 100))
+    );
+  } else if (fallbackFossilFreeCount > 0) {
+    averageFossilFreeShare = Math.round(fallbackFossilFreeSum / fallbackFossilFreeCount);
+  }
 
   return {
     averageCarbonIntensity,
-    totalProductionMW: totalProd > 0 ? totalProd : null,
+    totalProductionMW: totalProdMW > 0 ? totalProdMW : null,
     totalConsumptionMW: totalConsumption > 0 ? totalConsumption : null,
+    totalRenewableProductionMW: totalRenewableMW > 0 ? totalRenewableMW : null,
+    totalFossilFreeProductionMW: totalFossilFreeMW > 0 ? totalFossilFreeMW : null,
     averageRenewableShare,
     averageFossilFreeShare,
     coveredCountriesCount: validSnapshots.length,

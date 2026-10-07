@@ -221,6 +221,38 @@ describe('Normalisation des données & Règle d’intégrité', () => {
     // Moyenne pondérée = (40 * 50000 + 400 * 50000) / 100000 = 220 gCO2eq/kWh
     expect(summary.averageCarbonIntensity).toBe(220);
     expect(summary.coveredCountriesCount).toBe(2);
+    // Part renouvelable pondérée en MW : (0.25 * 55000 + 0.55 * 50000) / (55000 + 50000) = (13750 + 27500) / 105000 = 39.28% -> 39%
+    expect(summary.averageRenewableShare).toBe(39);
+    // Part bas-carbone pondérée en MW : (0.90 * 55000 + 0.55 * 50000) / (55000 + 50000) = (49500 + 27500) / 105000 = 73.33% -> 73%
+    expect(summary.averageFossilFreeShare).toBe(73);
+  });
+
+  it('calcule les parts européennes selon les MW agrégés réels plutôt qu’une moyenne arithmétique simple (cas France / Malte)', () => {
+    // Cas concret : France 80% propre avec 60 000 MW vs Malte 20% propre avec 300 MW
+    // La moyenne arithmétique simple donnerait faussement (80 + 20) / 2 = 50%
+    // Le calcul physique agrégé donne : (48 000 MW + 60 MW) / 60 300 MW = 79.7% -> 80%
+    const rawSnapshots: Record<string, any> = {
+      FR: {
+        countryCode: 'FR',
+        carbonIntensity: 45,
+        totalConsumption: 55000,
+        totalProduction: 60000,
+        renewablePercentage: 20,
+        fossilFreePercentage: 80,
+      },
+      MT: {
+        countryCode: 'MT',
+        carbonIntensity: 450,
+        totalConsumption: 320,
+        totalProduction: 300,
+        renewablePercentage: 20,
+        fossilFreePercentage: 20,
+      },
+    };
+
+    const summary = computeEUSummary(rawSnapshots);
+    expect(summary.averageFossilFreeShare).toBe(80); // Et non 50%
+    expect(summary.totalProductionMW).toBe(60300);
   });
 
   it('respecte la règle stricte « Zéro donnée inventée » : pas de fausse courbe sinusoïdale', () => {

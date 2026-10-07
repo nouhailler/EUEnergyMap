@@ -8,6 +8,9 @@ interface EUSummaryCardsProps {
   averageRenewableShare: number | null;
   averageFossilFreeShare: number | null;
   coveredCountriesCount: number;
+  totalProductionMW?: number | null;
+  totalRenewableProductionMW?: number | null;
+  totalFossilFreeProductionMW?: number | null;
 }
 
 export const EUSummaryCards: React.FC<EUSummaryCardsProps> = ({
@@ -16,6 +19,9 @@ export const EUSummaryCards: React.FC<EUSummaryCardsProps> = ({
   averageRenewableShare,
   averageFossilFreeShare,
   coveredCountriesCount,
+  totalProductionMW,
+  totalRenewableProductionMW,
+  totalFossilFreeProductionMW,
 }) => {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
@@ -51,8 +57,11 @@ export const EUSummaryCards: React.FC<EUSummaryCardsProps> = ({
         <div className="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-400">
           <UnitFormattedValue value={averageRenewableShare} unit="%" />
         </div>
-        <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-          Éolien, solaire, hydro, biomasse, géothermie
+        <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+          <Info className="w-3 h-3 text-slate-400 shrink-0" />
+          {totalRenewableProductionMW && totalRenewableProductionMW > 0
+            ? `${(totalRenewableProductionMW / 1000).toFixed(1)} GW produits sur ${totalProductionMW ? (totalProductionMW / 1000).toFixed(1) : ''} GW UE`
+            : 'Pondérée par les MW produits dans l’UE'}
         </p>
       </div>
 
@@ -69,8 +78,11 @@ export const EUSummaryCards: React.FC<EUSummaryCardsProps> = ({
         <div className="mt-2 text-2xl font-bold text-indigo-600 dark:text-indigo-400">
           <UnitFormattedValue value={averageFossilFreeShare} unit="%" />
         </div>
-        <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-          Renouvelables + Nucléaire (sans fossile)
+        <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+          <Info className="w-3 h-3 text-slate-400 shrink-0" />
+          {totalFossilFreeProductionMW && totalFossilFreeProductionMW > 0
+            ? `${(totalFossilFreeProductionMW / 1000).toFixed(1)} GW décarbonés (Renouv. + Nucléaire)`
+            : 'Renouvelables + Nucléaire (pondérée en MW)'}
         </p>
       </div>
 

@@ -20,6 +20,7 @@ import { Footer } from './components/common/Footer';
 import { OfflineIndicator } from './components/common/OfflineIndicator';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { DataProvenanceBanner } from './components/common/DataProvenanceBanner';
+import { OnboardingLegalModal, ONBOARDING_STORAGE_KEY } from './components/common/OnboardingLegalModal';
 
 const POLLING_INTERVAL_SECONDS = 300; // 5 minutes
 
@@ -38,6 +39,25 @@ export default function App() {
   const [dataSource, setDataSource] = useState<string>('Référence locale');
 
   const [secondsUntilRefresh, setSecondsUntilRefresh] = useState<number>(POLLING_INTERVAL_SECONDS);
+
+  // État de l'onboarding et des mentions légales
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(ONBOARDING_STORAGE_KEY) !== 'true';
+    }
+    return false;
+  });
+  const [onboardingInitialStep, setOnboardingInitialStep] = useState<number>(0);
+
+  const handleOpenLegal = useCallback(() => {
+    setOnboardingInitialStep(2);
+    setIsOnboardingOpen(true);
+  }, []);
+
+  const handleOpenOnboarding = useCallback(() => {
+    setOnboardingInitialStep(0);
+    setIsOnboardingOpen(true);
+  }, []);
 
   // Synchronisation URL -> État
   useEffect(() => {
@@ -141,6 +161,8 @@ export default function App() {
         dataTimestamp={dataTimestamp}
         retrievedAt={retrievedAt}
         dataSource={dataSource}
+        onOpenLegal={handleOpenLegal}
+        onOpenOnboarding={handleOpenOnboarding}
       />
 
       {/* Contenu principal */}
@@ -186,6 +208,9 @@ export default function App() {
                 <EUSummaryCards
                   averageCarbonIntensity={euSummary.averageCarbonIntensity}
                   totalConsumptionMW={euSummary.totalConsumptionMW}
+                  totalProductionMW={euSummary.totalProductionMW}
+                  totalRenewableProductionMW={euSummary.totalRenewableProductionMW}
+                  totalFossilFreeProductionMW={euSummary.totalFossilFreeProductionMW}
                   averageRenewableShare={euSummary.averageRenewableShare}
                   averageFossilFreeShare={euSummary.averageFossilFreeShare}
                   coveredCountriesCount={euSummary.coveredCountriesCount}
@@ -268,7 +293,14 @@ export default function App() {
       <OfflineIndicator />
 
       {/* Pied de page & Attribution Electricity Maps */}
-      <Footer />
+      <Footer onOpenLegal={handleOpenLegal} onOpenOnboarding={handleOpenOnboarding} />
+
+      {/* Modale d'accueil et Mentions Légales */}
+      <OnboardingLegalModal
+        isOpen={isOnboardingOpen}
+        onClose={() => setIsOnboardingOpen(false)}
+        initialStep={onboardingInitialStep}
+      />
     </div>
   );
 }

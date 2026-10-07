@@ -9,6 +9,7 @@ import {
   Globe2,
   Menu,
   TrendingUp,
+  Scale,
 } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
 import { HamburgerMenu } from './HamburgerMenu';
@@ -25,6 +26,8 @@ interface NavbarProps {
   dataTimestamp?: string | null;
   retrievedAt?: string | null;
   dataSource?: string | null;
+  onOpenLegal?: () => void;
+  onOpenOnboarding?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -38,6 +41,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   dataTimestamp,
   retrievedAt,
   dataSource,
+  onOpenLegal,
+  onOpenOnboarding,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -136,6 +141,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
               </div>
 
+              {/* Bouton Mentions Légales direct */}
+              {onOpenLegal && (
+                <button
+                  onClick={onOpenLegal}
+                  className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50/60 dark:hover:bg-amber-950/40 transition cursor-pointer border border-transparent hover:border-amber-200 dark:hover:border-amber-800"
+                  aria-label="Mentions Légales & Non-responsabilité"
+                  title="Mentions Légales & Clause de non-responsabilité"
+                >
+                  <Scale className="w-3.5 h-3.5 text-amber-500" />
+                  <span className="hidden lg:inline text-[11px]">Mentions Légales</span>
+                </button>
+              )}
+
               {/* Bouton PWA Install */}
               <PWAInstallButton />
 
@@ -202,6 +220,8 @@ export const Navbar: React.FC<NavbarProps> = ({
         secondsUntilRefresh={secondsUntilRefresh}
         onManualRefresh={onManualRefresh}
         isRefreshing={isRefreshing}
+        onOpenLegal={onOpenLegal}
+        onOpenOnboarding={onOpenOnboarding}
       />
     </>
   );

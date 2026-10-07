@@ -18,6 +18,8 @@ import {
   Radio,
   SlidersHorizontal,
   TrendingUp,
+  Scale,
+  BookOpen,
 } from 'lucide-react';
 import { EU_COUNTRIES } from '../../data/euCountries';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
@@ -52,6 +54,8 @@ interface HamburgerMenuProps {
   secondsUntilRefresh: number;
   onManualRefresh: () => void;
   isRefreshing: boolean;
+  onOpenLegal?: () => void;
+  onOpenOnboarding?: () => void;
 }
 
 export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
@@ -67,6 +71,8 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
   secondsUntilRefresh,
   onManualRefresh,
   isRefreshing,
+  onOpenLegal,
+  onOpenOnboarding,
 }) => {
   const [countrySearch, setCountrySearch] = useState('');
   const [showCountrySelector, setShowCountrySelector] = useState(false);
@@ -376,6 +382,59 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                   )}
                 </div>
               )}
+            </div>
+
+            {/* Section Mentions Légales & Guide */}
+            <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-850/60 space-y-2">
+              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
+                Mentions & Transparence
+              </span>
+              <div className="flex flex-col gap-1.5">
+                {onOpenLegal && (
+                  <button
+                    onClick={() => {
+                      onClose();
+                      onOpenLegal();
+                    }}
+                    className="flex items-center justify-between p-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 hover:text-sky-600 dark:hover:text-sky-400 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition cursor-pointer text-left"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Scale className="w-4 h-4 text-amber-500 shrink-0" />
+                      <span>Mentions Légales & Non-responsabilité</span>
+                    </span>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                  </button>
+                )}
+
+                {onOpenOnboarding && (
+                  <button
+                    onClick={() => {
+                      onClose();
+                      onOpenOnboarding();
+                    }}
+                    className="flex items-center justify-between p-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 hover:text-sky-600 dark:hover:text-sky-400 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition cursor-pointer text-left"
+                  >
+                    <span className="flex items-center gap-2">
+                      <BookOpen className="w-4 h-4 text-sky-500 shrink-0" />
+                      <span>Revoir le Guide d'accueil</span>
+                    </span>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                  </button>
+                )}
+
+                <a
+                  href="https://app.electricitymaps.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between p-2 rounded-lg text-xs font-medium text-sky-700 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/50 transition cursor-pointer"
+                >
+                  <span className="flex items-center gap-2">
+                    <ExternalLink className="w-4 h-4 shrink-0" />
+                    <span>Source : https://app.electricitymaps.com/</span>
+                  </span>
+                  <ChevronRight className="w-3.5 h-3.5 text-sky-400" />
+                </a>
+              </div>
             </div>
 
             {/* PWA & Installation si disponible */}
