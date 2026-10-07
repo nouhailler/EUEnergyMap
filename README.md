@@ -146,11 +146,26 @@ L'application démarre sur `http://localhost:3000`.
 npm run test
 ```
 
-### 5. Compiler pour la production
+### 5. Compiler et Déployer
+
+#### En local / Serveur Node full-stack
 ```bash
 npm run build
 npm start
 ```
+
+#### Déploiement sur Cloudflare Pages
+Lors de la configuration dans le tableau de bord Cloudflare Pages :
+- **Framework preset** : `Vite`
+- **Build command** : `npm run build`
+- **Build output directory** : `dist` *(Attention : ne pas laisser vide ou `/`, sinon Cloudflare déploie le code source non compilé et la page reste blanche)*
+- **Node.js Version** : Détecté automatiquement via `.nvmrc` et `.node-version` (Node 20).
+- **Déploiement en ligne de commande (Wrangler)** :
+  ```bash
+  npm run build
+  npx wrangler pages deploy dist
+  ```
+*(Toujours cibler le dossier `dist`, et non la racine `.`)*
 
 ---
 

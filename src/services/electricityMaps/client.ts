@@ -86,8 +86,9 @@ export class ElectricityMapsClient {
           headers: { Accept: 'application/json' },
         });
 
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status} lors de la récupération du résumé UE`);
+        const contentType = res.headers?.get?.('content-type') || '';
+        if (!res.ok || !contentType.includes('json')) {
+          throw new Error(`HTTP ${res.status} ou réponse non-JSON lors de la récupération du résumé UE`);
         }
 
         const rawData: EUSummaryResponse = await res.json();
@@ -138,7 +139,8 @@ export class ElectricityMapsClient {
     const promise = (async () => {
       try {
         const res = await fetch(`${this.baseUrl}/snapshot?zone=${encodeURIComponent(zoneKey)}`);
-        if (!res.ok) {
+        const contentType = res.headers?.get?.('content-type') || '';
+        if (!res.ok || !contentType.includes('json')) {
           throw new Error(`Erreur HTTP ${res.status} pour la zone ${zoneKey}`);
         }
         const rawData: CountryElectricitySnapshot = await res.json();
@@ -151,10 +153,10 @@ export class ElectricityMapsClient {
         if (stale) return sanitizeSnapshot(stale.data);
 
         // Fallback par pays
-        const ref = EU_REFERENCE_SNAPSHOTS[zoneKey];
+        const ref = EU_REFERENCE_SNAPSHOTS[zoneKey] || EU_REFERENCE_SNAPSHOTS[zoneKey.toUpperCase()] || EU_REFERENCE_SNAPSHOTS['FR'];
         if (ref) return sanitizeSnapshot(ref);
 
-        throw err;
+        return sanitizeSnapshot(EU_REFERENCE_SNAPSHOTS['FR']);
       } finally {
         IN_FLIGHT_PROMISES.delete(cacheKey);
       }
@@ -181,7 +183,8 @@ export class ElectricityMapsClient {
 
     try {
       const res = await fetch(`${this.baseUrl}/history?zone=${encodeURIComponent(zoneKey)}&granularity=${encodeURIComponent(granularity)}`);
-      if (res.ok) {
+      const contentType = res.headers?.get?.('content-type') || '';
+      if (res.ok && contentType.includes('json')) {
         const data = await res.json();
         if (data && Array.isArray(data.history) && data.history.length > 0) {
           const result: CountryHistoryData = {
@@ -251,7 +254,8 @@ export class ElectricityMapsClient {
 
     try {
       const res = await fetch(`${this.baseUrl}/timeline?zone=${encodeURIComponent(zoneKey)}&granularity=${encodeURIComponent(granularity)}`);
-      if (res.ok) {
+      const contentType = res.headers?.get?.('content-type') || '';
+      if (res.ok && contentType.includes('json')) {
         const data = await res.json();
         if (data && Array.isArray(data.points) && data.points.length > 0) {
           const result: TimelineData = {
@@ -320,7 +324,8 @@ export class ElectricityMapsClient {
 
     try {
       const res = await fetch(`${this.baseUrl}/mix-history?zone=${encodeURIComponent(zoneKey)}&granularity=${encodeURIComponent(granularity)}`);
-      if (res.ok) {
+      const contentType = res.headers?.get?.('content-type') || '';
+      if (res.ok && contentType.includes('json')) {
         const data = await res.json();
         if (data && Array.isArray(data.points) && data.points.length > 0) {
           const result: MixHistoryData = {
@@ -405,7 +410,8 @@ export class ElectricityMapsClient {
 
     try {
       const res = await fetch(`${this.baseUrl}/flows-history?zone=${encodeURIComponent(zoneKey)}&granularity=${encodeURIComponent(granularity)}`);
-      if (res.ok) {
+      const contentType = res.headers?.get?.('content-type') || '';
+      if (res.ok && contentType.includes('json')) {
         const data = await res.json();
         if (data && Array.isArray(data.points) && data.points.length > 0) {
           const result: FlowsHistoryData = {
