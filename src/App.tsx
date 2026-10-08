@@ -21,6 +21,7 @@ import { OfflineIndicator } from './components/common/OfflineIndicator';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { DataProvenanceBanner } from './components/common/DataProvenanceBanner';
 import { OnboardingLegalModal, ONBOARDING_STORAGE_KEY } from './components/common/OnboardingLegalModal';
+import { ScreenContextualOnboarding } from './components/common/ScreenContextualOnboarding';
 
 const POLLING_INTERVAL_SECONDS = 300; // 5 minutes
 
@@ -57,6 +58,16 @@ export default function App() {
   const handleOpenOnboarding = useCallback(() => {
     setOnboardingInitialStep(0);
     setIsOnboardingOpen(true);
+  }, []);
+
+  // Déclenchement de l'onboarding contextuel de l'écran courant
+  const [guideForceOpen, setGuideForceOpen] = useState<boolean | undefined>(undefined);
+  const handleOpenScreenGuide = useCallback(() => {
+    setGuideForceOpen(true);
+    setTimeout(() => {
+      setGuideForceOpen(undefined);
+    }, 200);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
   // Synchronisation URL -> État
@@ -163,6 +174,7 @@ export default function App() {
         dataSource={dataSource}
         onOpenLegal={handleOpenLegal}
         onOpenOnboarding={handleOpenOnboarding}
+        onOpenScreenGuide={handleOpenScreenGuide}
       />
 
       {/* Contenu principal */}
@@ -205,6 +217,13 @@ export default function App() {
                   />
                 </div>
 
+                {/* Guide d'onboarding contextuel : Vue Dashboard & Carte */}
+                <ScreenContextualOnboarding
+                  screenId="dashboard"
+                  forceOpen={guideForceOpen}
+                  onOpenLegal={handleOpenLegal}
+                />
+
                 <EUSummaryCards
                   averageCarbonIntensity={euSummary.averageCarbonIntensity}
                   totalConsumptionMW={euSummary.totalConsumptionMW}
@@ -234,55 +253,103 @@ export default function App() {
 
             {/* Vue Fiche Pays */}
             {currentView === 'country' && activeCountrySnapshot && (
-              <CountryDetailView
-                snapshot={activeCountrySnapshot}
-                onBack={() => handleNavigate('dashboard')}
-                onSelectCountry={handleSelectCountry}
-                onNavigate={handleNavigate}
-              />
+              <div className="space-y-6">
+                {/* Guide d'onboarding contextuel : Fiche Pays */}
+                <ScreenContextualOnboarding
+                  screenId="country"
+                  forceOpen={guideForceOpen}
+                  onOpenLegal={handleOpenLegal}
+                />
+                <CountryDetailView
+                  snapshot={activeCountrySnapshot}
+                  onBack={() => handleNavigate('dashboard')}
+                  onSelectCountry={handleSelectCountry}
+                  onNavigate={handleNavigate}
+                />
+              </div>
             )}
 
             {/* Vue Comparateur */}
             {currentView === 'compare' && (
-              <CompareView
-                snapshots={snapshots}
-                onSelectCountry={handleSelectCountry}
-              />
+              <div className="space-y-6">
+                {/* Guide d'onboarding contextuel : Comparateur */}
+                <ScreenContextualOnboarding
+                  screenId="compare"
+                  forceOpen={guideForceOpen}
+                  onOpenLegal={handleOpenLegal}
+                />
+                <CompareView
+                  snapshots={snapshots}
+                  onSelectCountry={handleSelectCountry}
+                />
+              </div>
             )}
 
             {/* Vue Focus Carbone */}
             {currentView === 'carbon' && (
-              <CarbonView
-                snapshots={snapshots}
-                onSelectCountry={handleSelectCountry}
-                onNavigate={handleNavigate}
-              />
+              <div className="space-y-6">
+                {/* Guide d'onboarding contextuel : Observatoire Carbone */}
+                <ScreenContextualOnboarding
+                  screenId="carbon"
+                  forceOpen={guideForceOpen}
+                  onOpenLegal={handleOpenLegal}
+                />
+                <CarbonView
+                  snapshots={snapshots}
+                  onSelectCountry={handleSelectCountry}
+                  onNavigate={handleNavigate}
+                />
+              </div>
             )}
 
             {/* Vue Focus Renouvelables */}
             {currentView === 'renewables' && (
-              <RenewablesView
-                snapshots={snapshots}
-                onSelectCountry={handleSelectCountry}
-              />
+              <div className="space-y-6">
+                {/* Guide d'onboarding contextuel : Renouvelables */}
+                <ScreenContextualOnboarding
+                  screenId="renewables"
+                  forceOpen={guideForceOpen}
+                  onOpenLegal={handleOpenLegal}
+                />
+                <RenewablesView
+                  snapshots={snapshots}
+                  onSelectCountry={handleSelectCountry}
+                />
+              </div>
             )}
 
             {/* Vue Flux & Interconnexions */}
             {currentView === 'flows' && (
-              <FlowsView
-                snapshots={snapshots}
-                onSelectCountry={handleSelectCountry}
-              />
+              <div className="space-y-6">
+                {/* Guide d'onboarding contextuel : Flux & Interconnexions */}
+                <ScreenContextualOnboarding
+                  screenId="flows"
+                  forceOpen={guideForceOpen}
+                  onOpenLegal={handleOpenLegal}
+                />
+                <FlowsView
+                  snapshots={snapshots}
+                  onSelectCountry={handleSelectCountry}
+                />
+              </div>
             )}
 
             {/* Vue Journée Électrique (Timeline 24h) */}
             {currentView === 'timeline' && (
-              <DayTimelineView
-                snapshots={snapshots}
-                selectedCountryCode={selectedCountryCode}
-                onSelectCountry={handleSelectCountry}
-                onNavigate={handleNavigate}
-              />
+              <div className="space-y-6">
+                {/* Guide d'onboarding contextuel : Chronologie 24h */}
+                <ScreenContextualOnboarding
+                  screenId="timeline"
+                  forceOpen={guideForceOpen}
+                  onOpenLegal={handleOpenLegal}
+                />
+                <DayTimelineView
+                  snapshots={snapshots}
+                  selectedCountryCode={selectedCountryCode}
+                  onSelectCountry={handleSelectCountry}
+                  onNavigate={handleNavigate}
+                />
+              </div>
             )}
           </>
         )}

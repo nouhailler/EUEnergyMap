@@ -20,6 +20,7 @@ import {
   TrendingUp,
   Scale,
   BookOpen,
+  Lightbulb,
 } from 'lucide-react';
 import { EU_COUNTRIES } from '../../data/euCountries';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
@@ -56,6 +57,7 @@ interface HamburgerMenuProps {
   isRefreshing: boolean;
   onOpenLegal?: () => void;
   onOpenOnboarding?: () => void;
+  onOpenScreenGuide?: () => void;
 }
 
 export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
@@ -73,6 +75,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
   isRefreshing,
   onOpenLegal,
   onOpenOnboarding,
+  onOpenScreenGuide,
 }) => {
   const [countrySearch, setCountrySearch] = useState('');
   const [showCountrySelector, setShowCountrySelector] = useState(false);
@@ -387,9 +390,25 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
             {/* Section Mentions Légales & Guide */}
             <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-850/60 space-y-2">
               <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-                Mentions & Transparence
+                Mentions & Guides
               </span>
               <div className="flex flex-col gap-1.5">
+                {onOpenScreenGuide && (
+                  <button
+                    onClick={() => {
+                      onClose();
+                      onOpenScreenGuide();
+                    }}
+                    className="flex items-center justify-between p-2 rounded-lg text-xs font-semibold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/60 hover:bg-sky-100 dark:hover:bg-sky-900/60 border border-sky-200 dark:border-sky-800 transition cursor-pointer text-left"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Lightbulb className="w-4 h-4 text-amber-500 shrink-0 animate-pulse" />
+                      <span>💡 Ouvrir le Guide de cet écran</span>
+                    </span>
+                    <ChevronRight className="w-3.5 h-3.5 text-sky-500" />
+                  </button>
+                )}
+
                 {onOpenLegal && (
                   <button
                     onClick={() => {

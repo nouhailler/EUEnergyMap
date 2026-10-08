@@ -10,6 +10,7 @@ import {
   Menu,
   TrendingUp,
   Scale,
+  Lightbulb,
 } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
 import { HamburgerMenu } from './HamburgerMenu';
@@ -28,6 +29,7 @@ interface NavbarProps {
   dataSource?: string | null;
   onOpenLegal?: () => void;
   onOpenOnboarding?: () => void;
+  onOpenScreenGuide?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -43,6 +45,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   dataSource,
   onOpenLegal,
   onOpenOnboarding,
+  onOpenScreenGuide,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -141,6 +144,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
               </div>
 
+              {/* Bouton Guide contextuel de l'écran */}
+              {onOpenScreenGuide && (
+                <button
+                  onClick={onOpenScreenGuide}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/60 hover:bg-sky-100 dark:hover:bg-sky-900/60 transition cursor-pointer border border-sky-200 dark:border-sky-800 shadow-2xs"
+                  aria-label="Afficher le guide pédagogique de cet écran"
+                  title="Guide & explications de l'écran en cours"
+                >
+                  <Lightbulb className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+                  <span className="hidden md:inline text-[11px] font-semibold">Guide écran</span>
+                </button>
+              )}
+
               {/* Bouton Mentions Légales direct */}
               {onOpenLegal && (
                 <button
@@ -222,6 +238,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         isRefreshing={isRefreshing}
         onOpenLegal={onOpenLegal}
         onOpenOnboarding={onOpenOnboarding}
+        onOpenScreenGuide={onOpenScreenGuide}
       />
     </>
   );
