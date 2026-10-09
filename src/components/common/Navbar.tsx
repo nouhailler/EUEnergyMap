@@ -11,10 +11,15 @@ import {
   TrendingUp,
   Scale,
   Lightbulb,
+  Settings,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
 import { HamburgerMenu } from './HamburgerMenu';
 import { formatDataDateTime } from './DataProvenanceBanner';
+import { AppLogo } from './AppLogo';
+import { useTheme } from '../../hooks/useTheme';
 
 interface NavbarProps {
   currentView: string;
@@ -30,6 +35,7 @@ interface NavbarProps {
   onOpenLegal?: () => void;
   onOpenOnboarding?: () => void;
   onOpenScreenGuide?: () => void;
+  onOpenSettings?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -46,8 +52,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenLegal,
   onOpenOnboarding,
   onOpenScreenGuide,
+  onOpenSettings,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { toggleTheme, isDarkMode } = useTheme();
 
   const formatTime = (totalSeconds: number) => {
     const mins = Math.floor(totalSeconds / 60);
@@ -74,21 +82,9 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 onClick={() => onNavigate('dashboard')}
                 className="flex items-center gap-2.5 text-left group cursor-pointer"
+                aria-label="Accueil EU Energy Map"
               >
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-sky-600/20 group-hover:scale-105 transition">
-                  <Activity className="w-5 h-5 text-amber-300" />
-                </div>
-                <div>
-                  <span className="text-base font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-1.5">
-                    EU Energy Map
-                    <span className="text-[10px] font-semibold bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 px-1.5 py-0.5 rounded">
-                      27 UE
-                    </span>
-                  </span>
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400 block -mt-0.5">
-                    Tableau de bord factuel de l'électricité
-                  </span>
-                </div>
+                <AppLogo size="md" showText={true} showBadge={true} />
               </button>
             </div>
 
@@ -153,7 +149,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   title="Guide & explications de l'écran en cours"
                 >
                   <Lightbulb className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
-                  <span className="hidden md:inline text-[11px] font-semibold">Guide écran</span>
+                  <span className="hidden sm:inline text-[11px] font-semibold">Guide écran</span>
                 </button>
               )}
 
@@ -172,6 +168,32 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               {/* Bouton PWA Install */}
               <PWAInstallButton />
+
+              {/* Bouton Bascule Thème Clair / Sombre */}
+              <button
+                onClick={toggleTheme}
+                className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+                aria-label={isDarkMode ? 'Activer le thème clair' : 'Activer le thème sombre'}
+                title={isDarkMode ? 'Passer en thème Clair' : 'Passer en thème Sombre'}
+              >
+                {isDarkMode ? (
+                  <Sun className="w-4 h-4 text-amber-400" />
+                ) : (
+                  <Moon className="w-4 h-4 text-slate-600" />
+                )}
+              </button>
+
+              {/* Bouton Paramètres Système (Mises à jour, Version, Cache) */}
+              {onOpenSettings && (
+                <button
+                  onClick={onOpenSettings}
+                  className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+                  aria-label="Ouvrir les paramètres système"
+                  title="Paramètres Système & Mises à jour"
+                >
+                  <Settings className="w-4 h-4" />
+                </button>
+              )}
 
               {/* Bouton Hamburger Menu avec fonctionnalités classées par catégorie */}
               <button
@@ -239,6 +261,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         onOpenLegal={onOpenLegal}
         onOpenOnboarding={onOpenOnboarding}
         onOpenScreenGuide={onOpenScreenGuide}
+        onOpenSettings={onOpenSettings}
       />
     </>
   );

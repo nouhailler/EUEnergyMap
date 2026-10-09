@@ -1,0 +1,15 @@
+{
+  "version": "1.4.2",
+  "releaseDate": "2026-10-09",
+  "releaseDateFormatted": "9 octobre 2026",
+  "buildId": "20261009-rev4",
+  "buildTimestamp": 1791557000000,
+  "channel": "stable",
+  "changelog": [
+    "Menu de paramètres système complet avec vérification et forçage",
+    "Système de mises à jour automatiques en tâche de fond",
+    "Mode Thème Clair, Sombre et synchronisation Système",
+    "Bouton et guide universel d'installation d'application (PWA)",
+    "Nouveau logo officiel haute définition et captures illustrées"
+  ]
+}

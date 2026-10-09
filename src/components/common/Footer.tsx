@@ -1,23 +1,28 @@
 import React from 'react';
-import { Shield, ExternalLink, Globe, Scale, BookOpen } from 'lucide-react';
+import { Shield, ExternalLink, Globe, Scale, BookOpen, Lightbulb } from 'lucide-react';
+import { AppLogo } from './AppLogo';
 
 interface FooterProps {
   onOpenLegal?: () => void;
   onOpenOnboarding?: () => void;
+  onOpenScreenGuide?: () => void;
 }
 
-export const Footer: React.FC<FooterProps> = ({ onOpenLegal, onOpenOnboarding }) => {
+export const Footer: React.FC<FooterProps> = ({ onOpenLegal, onOpenOnboarding, onOpenScreenGuide }) => {
   return (
     <footer className="mt-16 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-10 text-xs text-slate-500 dark:text-slate-400">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-6">
-          <div>
-            <span className="font-bold text-slate-900 dark:text-white text-sm block">
-              EU Energy Map — Observatoire Électrique Européen
-            </span>
-            <p className="mt-1 text-slate-500 dark:text-slate-400 max-w-xl leading-relaxed">
-              Visualisation cartographique et agrégation physique des 27 réseaux interconnectés de l'Union européenne.
-            </p>
+          <div className="flex items-center gap-3">
+            <AppLogo size="md" />
+            <div>
+              <span className="font-bold text-slate-900 dark:text-white text-sm block">
+                EU Energy Map — Observatoire Électrique Européen
+              </span>
+              <p className="mt-0.5 text-slate-500 dark:text-slate-400 max-w-xl leading-relaxed">
+                Visualisation cartographique et agrégation physique des 27 réseaux interconnectés de l'Union européenne.
+              </p>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
@@ -28,6 +33,16 @@ export const Footer: React.FC<FooterProps> = ({ onOpenLegal, onOpenOnboarding })
               >
                 <Scale className="w-3.5 h-3.5 text-amber-500" />
                 <span>Mentions Légales & Non-responsabilité</span>
+              </button>
+            )}
+
+            {onOpenScreenGuide && (
+              <button
+                onClick={onOpenScreenGuide}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-sky-300 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 hover:bg-sky-100 transition font-medium cursor-pointer"
+              >
+                <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+                <span>Guide de cet écran</span>
               </button>
             )}
 

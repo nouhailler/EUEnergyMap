@@ -1,183 +1,142 @@
-# EU Energy Map — Tableau de Bord Pédagogique de l'Électricité Européenne
+<p align="center">
+  <img src="public/logo.svg" width="120" height="120" alt="Logo Officiel EU Energy Map" />
+</p>
 
-[![React](https://img.shields.io/badge/React-19-blue.svg)](https://react.dev)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org)
-[![PWA Ready](https://img.shields.io/badge/PWA-Installable-emerald.svg)](https://developer.mozilla.org/fr/docs/Web/Progressive_web_apps)
-[![Data](https://img.shields.io/badge/Data-Electricity_Maps-amber.svg)](https://app.electricitymaps.com)
+<h1 align="center">🇪🇺 EU Energy Map — Observatoire Électrique Européen</h1>
 
-**EU Energy Map** est une application web progressive (PWA) pédagogique, factuelle et sobre permettant d'explorer en temps réel la situation électrique des **27 États membres de l'Union européenne**.
+<p align="center">
+  <strong>Tableau de bord factuel et didactique de l'électricité dans les 27 pays de l'Union européenne</strong>
+</p>
 
-L'application ne cherche pas à reproduire l'interface commerciale d'Electricity Maps, mais à offrir un outil didactique pour comprendre :
-- Comment l'électricité européenne est produite (nucléaire, hydraulique, éolien, solaire, gaz, charbon, biomasse, etc.) ;
-- L'intensité carbone associée (en `gCO₂eq/kWh`) ;
-- La distinction fondamentale entre énergie renouvelable et énergie bas-carbone (fossil-free) ;
-- La demande totale (charge réseau en GW) et la charge résiduelle (net load) ;
-- Les échanges et flux transfrontaliers entre pays interconnectés (réseau synchrone ENTSO-E) ;
-- L'évolution de ces grandeurs sur 24 heures glissantes.
-
----
-
-## 1. Principes Absolus & Règle d'Or des Données
-
-1. **Aucune donnée inventée, zéro courbe synthétique** : Si une information n'est pas transmise par l'API, elle est affichée comme `Donnée indisponible` ou `Donnée historique indisponible`. L'application **refuse expressément de fabriquer ou simuler des courbes temporelles artificielles** (fonctions sinus ou modèles inventés). Seule la dernière observation réelle certifiée est restituée.
-2. **Distinction entre zéro et valeur absente** : `0 MW` indique une mesure réelle d'absence de production (ex: solaire de nuit) ; `null` indique une indisponibilité de mesure.
-3. **Traçabilité des estimations** : Tout chiffre issu d'un modèle d'apprentissage ou d'une estimation porte le badge distinctif `<DataQualityBadge status="estimated" />`.
-4. **Pas de clé API dans le frontend** : La clé secrète Electricity Maps et la clé CARTO Basemaps ne sont jamais injectées dans le code client. Toutes les requêtes transitent par un proxy serveur Express sécurisé (`/api/electricity-maps/*` et `/api/carto/tiles/*`).
-5. **Neutralité factuelle** : L'outil ne propose aucun classement "meilleur/pire", aucun "gagnant/perdant" ni score global arbitraire.
+<p align="center">
+  <a href="https://react.dev"><img src="https://img.shields.io/badge/React-19.x-blue.svg?logo=react" alt="React 19" /></a>
+  <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-5.x-3178c6.svg?logo=typescript" alt="TypeScript" /></a>
+  <a href="https://tailwindcss.com"><img src="https://img.shields.io/badge/Tailwind_CSS-4.x-38bdf8.svg?logo=tailwindcss" alt="Tailwind CSS 4" /></a>
+  <a href="https://developer.mozilla.org/fr/docs/Web/Progressive_web_apps"><img src="https://img.shields.io/badge/PWA-Installable-10b981.svg?logo=pwa" alt="PWA Installable" /></a>
+  <a href="https://vitejs.dev"><img src="https://img.shields.io/badge/Vite-8.x-646cff.svg?logo=vite" alt="Vite" /></a>
+  <a href="https://app.electricitymaps.com"><img src="https://img.shields.io/badge/Data-Electricity_Maps_V4-f59e0b.svg" alt="Electricity Maps V4" /></a>
+  <img src="https://img.shields.io/badge/Thème-Clair_%26_Sombre-6366f1.svg" alt="Thème Clair & Sombre" />
+  <img src="https://img.shields.io/badge/Auto--Update-Arrière--Plan-06b6d4.svg" alt="Auto Update" />
+</p>
 
 ---
 
-## 2. Les 27 Pays Membres Couverts
+## 📸 Aperçu de l'Application
 
-| Code | Pays | Zone Electricity Maps |
-|---|---|---|
-| `AT` | Autriche | `AT` |
-| `BE` | Belgique | `BE` |
-| `BG` | Bulgarie | `BG` |
-| `HR` | Croatie | `HR` |
-| `CY` | Chypre | `CY` (réseau insulaire autonome) |
-| `CZ` | Tchéquie | `CZ` |
-| `DK` | Danemark | `DK` (`DK-DK1`, `DK-DK2`) |
-| `EE` | Estonie | `EE` |
-| `FI` | Finlande | `FI` |
-| `FR` | France | `FR` |
-| `DE` | Allemagne | `DE` |
-| `GR` | Grèce | `GR` |
-| `HU` | Hongrie | `HU` |
-| `IE` | Irlande | `IE` |
-| `IT` | Italie | `IT` (sous-zones de marché agrégées) |
-| `LV` | Lettonie | `LV` |
-| `LT` | Lituanie | `LT` |
-| `LU` | Luxembourg | `LU` |
-| `MT` | Malte | `MT` |
-| `NL` | Pays-Bas | `NL` |
-| `PL` | Pologne | `PL` |
-| `PT` | Portugal | `PT` |
-| `RO` | Roumanie | `RO` |
-| `SK` | Slovaquie | `SK` |
-| `SI` | Slovénie | `SI` |
-| `ES` | Espagne | `ES` |
-| `SE` | Suède | `SE` (`SE1` à `SE4` agrégées) |
+<p align="center">
+  <img src="docs/screenshot.jpg" width="920" alt="Capture d'écran du tableau de bord EU Energy Map" style="border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.15);" />
+  <br />
+  <em>Vue interactive du tableau de bord EU Energy Map : cartographie en temps réel des 27 pays, indicateurs environnementaux et mix énergétique.</em>
+</p>
 
 ---
 
-## 3. Architecture Technique
+## 🌟 Fonctionnalités Clés
+
+- 🌍 **Cartographie interactive des 27 pays de l'UE** : coloration dynamique selon l'intensité carbone (`gCO₂eq/kWh`), la part renouvelable (`%`) ou bas-carbone (`%`).
+- ⚡ **Agrégation physique rigoureuse en mégawatts (MW)** : calculs européens pondérés par la charge réelle, évitant les biais des moyennes arithmétiques.
+- ⚙️ **Menu de Paramètres Système complet** :
+  - 📅 **Date de sortie officielle** et identifiant de compilation (`buildId`).
+  - 🕒 **Date de dernière vérification** des mises à jour enregistrée.
+  - 🔄 **Bouton « Vérifier les mises à jour »** avec diagnostic immédiat.
+  - 🚀 **Bouton « Forcer la mise à jour »** avec purge du cache et rechargement propre.
+  - 🤖 **Mises à jour automatiques en arrière-plan** : vérification périodique toutes les 15 minutes et installation silencieuse.
+- ☀️ / 🌙 **Thème Clair & Thème Sombre** : bascule directe depuis la barre de navigation ou synchronisation automatique avec les préférences de votre système d'exploitation.
+- 📲 **Bouton « Installer l'application » (PWA)** : permet d'ajouter l'application sur l'écran d'accueil d'un smartphone (Android, iPhone Safari) ou sur le bureau d'un ordinateur (PC Windows, Mac, Linux) avec mode hors-ligne.
+- 💡 **Guides contextuels interactifs sur chaque écran** : des repères pédagogiques pas-à-pas pour comprendre chaque dimension (Fiche Pays, Comparateur, Observatoire Carbone, Renouvelables, Flux transfrontaliers, Chronologie 24h).
+- ⚖️ **Transparence et clause de non-responsabilité** : respect de l'attribution des données issues d'Electricity Maps et d'ENTSO-E.
+
+---
+
+## 📱 Installation de l'Application (PWA)
+
+EU Energy Map est conçue comme une **Progressive Web App (PWA)**. Vous n'avez pas besoin de passer par un magasin d'applications (App Store / Google Play).
+
+| Système / Navigateur | Procédure d'installation simplifiée |
+|---|---|
+| 🤖 **Android (Google Chrome)** | Touchez le bouton **« Installer l'app »** dans la barre supérieure ou les trois points **(⋮)** &gt; **« Installer l'application »** / **« Ajouter à l'écran d'accueil »**. |
+| 🍏 **iPhone / iPad (Safari)** | Touchez l'icône **Partager** (carré avec flèche vers le haut ⎋) &gt; faites défiler &gt; **« Sur l'écran d'accueil »** &gt; puis **« Ajouter »**. |
+| 💻 **Ordinateur (Chrome / Edge)** | Cliquez sur l'icône d'ordinateur à droite de la barre d'adresse ou sur le bouton **« Installer l'app »**. |
+
+---
+
+## 🛠️ Architecture Technique
 
 ```text
-src/
-├── components/
-│   ├── common/             # Navbar, Footer, Badges de qualité, Bouton PWA, Offline
-│   ├── europe/             # Carte interactive SVG, Cartes de synthèse, Tableau accessible
-│   ├── countries/          # Fiche détaillée pays, mix en barres, "Pourquoi ce chiffre ?"
-│   ├── compare/            # Comparateur multi-pays factuel (2 à 4 pays)
-│   ├── carbon/             # Focus intensité carbone, ACV vs direct, historique 24h
-│   ├── renewables/         # Focus filières renouvelables (éolien, solaire, hydro, etc.)
-│   └── flows/              # Visualisation des échanges et flux transfrontaliers
-├── data/
-│   ├── euCountries.ts      # Définition des 27 pays et coordonnées cartographiques
-│   ├── electricityZones.ts # Mapping officiel des zones de cotation
-│   ├── sourcesMeta.ts      # Métadonnées et couleurs des sources énergétiques
-│   └── referenceData.ts    # Relevés factuels certifiés pour secours / mode déconnecté
-├── services/
-│   └── electricityMaps/    # Normalizers stricts, client HTTP avec déduplication, cache
-├── types/
-│   └── energy.ts           # Types TypeScript garantissant l'intégrité
-├── hooks/
-│   ├── usePWAInstall.ts    # Hook d'installation PWA native
-│   └── useOnlineStatus.ts  # Détection de la connectivité réseau
-├── server.ts               # Proxy Express sécurisé, injection de token, cache serveur
-└── App.tsx                 # Routage réactif par URL hash et état centralisé
+EUEnergyMap/
+├── public/
+│   ├── logo.svg            # Logo vectoriel officiel haute fidélité
+│   ├── icon.svg            # Icône PWA pour écrans d'accueil
+│   ├── version.json        # Manifeste de version pour vérification distante
+│   └── _redirects          # Règles de routage SPA Cloudflare Pages
+├── docs/
+│   └── screenshot.jpg      # Capture d'écran du tableau de bord
+├── src/
+│   ├── components/
+│   │   ├── common/         # Navbar, Footer, AppLogo, SystemSettingsModal, PWAInstallButton
+│   │   ├── europe/         # Carte interactive SVG, Cartes de synthèse UE, Tableau
+│   │   ├── countries/      # Fiche détaillée pays, mix énergétique en barres
+│   │   ├── compare/        # Comparateur multi-pays synchronisé (2 à 4 pays)
+│   │   ├── carbon/         # Observatoire intensité carbone & méthodologie ACV
+│   │   ├── renewables/     # Observatoire filières renouvelables (éolien, solaire, hydro)
+│   │   ├── flows/          # Carte et diagramme des flux transfrontaliers (MW)
+│   │   └── timeline/       # Chronologie 24h & Duck Curve
+│   ├── hooks/
+│   │   ├── useTheme.ts         # Gestionnaire Thème Clair / Sombre / Système
+│   │   ├── useSystemUpdate.ts  # Système de mises à jour auto en arrière-plan
+│   │   ├── usePWAInstall.ts    # Détection et invite d'installation PWA
+│   │   └── useOnlineStatus.ts  # Détection connectivité réseau
+│   ├── services/
+│   │   ├── system/         # Service de versioning et purge de cache
+│   │   └── electricityMaps/# Client HTTP, déduplication, cache et normalisation
+│   ├── App.tsx             # Composant racine, routage URL hash et modales
+│   └── main.tsx            # Point d'entrée React
+└── server.ts               # Serveur Express proxy sécurisé & endpoints API
 ```
 
 ---
 
-## 4. Endpoints Utilisés (Electricity Maps API V4)
+## 🚀 Démarrage Rapide
 
-Le backend Express interroge désormais **100 % de l'API en V4** avec une cascade de résilience :
-
-- `GET /v4/electricity-mix/latest?zone=XX` : Mix de production (`normal`), mix de consommation *flow-traced*, stockage, imports et exports (avec repli automatique sur `/v4/power-breakdown/latest` puis `/v3/power-breakdown/latest` si le plan de clé ne supporte pas encore le signal).
-- `GET /v4/electricity-flows/latest?zone=XX` : Flux physiques et interconnexions transfrontalières.
-- `GET /v4/carbon-intensity/latest?zone=XX` : Intensité carbone instantanée en cycle de vie (`gCO₂eq/kWh`).
-- `GET /v4/carbon-intensity/history?zone=XX&temporalResolution=15_minutes` : Relevés glissants sur 24 heures avec support des granularités V4 (`15_minutes` par défaut — 96 points, `5_minutes` — 288 points, et `hourly` — 24 points).
-- `GET /v4/carbon-intensity-fossil-only/latest?zone=XX` : Intensité carbone des seules filières thermiques fossiles.
-- `GET /v4/carbon-intensity-level/latest?zone=XX` : Palier qualitatif d'intensité carbone officiel calculé par rapport à l'historique récent de la zone.
-- `GET /v4/carbon-free-percentage-level/latest?zone=XX` : Palier qualitatif d'énergie décarbonée officiel.
-- `GET /v4/renewable-percentage-level/latest?zone=XX` : Palier qualitatif d'énergie renouvelable officiel.
-- `GET /v4/total-reported-load/latest?zone=XX` : Charge totale déclarée par les gestionnaires de réseau (TSO / RTE / ENTSO-E).
-- `GET /v4/net-load/latest?zone=XX` : Charge résiduelle nette officielle intégrant stockage et échanges.
-
----
-
-## 5. Installation & Configuration
-
-### Prérequis
-- Node.js 20+
-- npm ou yarn
-
-### 1. Cloner et installer les dépendances
+### 1. Cloner le projet et installer les dépendances
 ```bash
+git clone https://github.com/nouhailler/EUEnergyMap.git
+cd EUEnergyMap
 npm install
 ```
 
-### 2. Configuration des variables d'environnement
-Créez un fichier `.env` à la racine (ou configurez vos variables serveur) :
-```bash
-# Token d'authentification pour l'API Electricity Maps (v3/v4)
-# Utilisé côté serveur uniquement — ne jamais préfixer par VITE_
+### 2. Variables d'environnement (optionnel)
+Créez un fichier `.env` si vous disposez d'une clé API Electricity Maps dédiée :
+```env
 ELECTRICITY_MAPS_API_KEY="votre_cle_api_secrete"
-
-# Clé API pour le service de tuiles cartographiques CARTO Basemaps (Positron & Dark Matter)
-# Fallback automatique transparent vers OpenStreetMap (OSM) en cas d'erreur ou indisponibilité
-CARTO_API_KEY="cb1_401f_1_81e88d5ab80e13c7924b8b1d"
 ```
+*(Si aucune clé n'est fournie, l'application fonctionne immédiatement avec le jeu de données factuel certifié).*
 
-> **Note de probité & résilience :**
-> - Si l'API Electricity Maps n'a pas de données historiques pour une zone, l'application applique la règle stricte **« Zéro donnée inventée »** : elle n'invente **JAMAIS** de courbe par fonction sinus ou simulation synthétique, et affiche explicitement `Donnée historique indisponible` avec la dernière observation certifiée.
-> - Pour les fonds cartographiques, le serveur interroge CARTO Basemaps avec la clé fournie et bascule instantanément sur OpenStreetMap si le service est injoignable ou en cas de quota épuisé.
-
-### 3. Lancer en développement
+### 3. Lancer en mode développement
 ```bash
 npm run dev
 ```
-L'application démarre sur `http://localhost:3000`.
+L'application est accessible sur `http://localhost:3000`.
 
-### 4. Lancer les tests unitaires
-```bash
-npm run test
-```
-
-### 5. Compiler et Déployer
-
-#### En local / Serveur Node full-stack
+### 4. Compiler pour la production
 ```bash
 npm run build
-npm start
 ```
+Les fichiers compilés prêts à être déployés sont générés dans le dossier `dist/`.
 
-#### Déploiement sur Cloudflare Pages
+---
+
+## ☁️ Déploiement Cloudflare Pages
+
 Lors de la configuration dans le tableau de bord Cloudflare Pages :
 - **Framework preset** : `Vite`
 - **Build command** : `npm run build`
-- **Build output directory** : `dist` *(Attention : ne pas laisser vide ou `/`, sinon Cloudflare déploie le code source non compilé et la page reste blanche)*
+- **Build output directory** : `dist` *(Indispensable : toujours spécifier `dist`)*
 - **Node.js Version** : Détecté automatiquement via `.nvmrc` et `.node-version` (Node 20).
-- **Déploiement en ligne de commande (Wrangler)** :
-  ```bash
-  npm run build
-  npx wrangler pages deploy dist
-  ```
-*(Toujours cibler le dossier `dist`, et non la racine `.`)*
 
 ---
 
-## 6. Progressive Web App (PWA) & Mode Hors-Ligne
+## 📜 Mentions Légales & Origine des Données
 
-- **Installabilité** : Bouton d'installation intégré dans l'en-tête (Desktop Chrome/Edge, Android, et guide dédié pour iOS Safari).
-- **Service Worker** : Précaching des assets statiques via `vite-plugin-pwa` et stratégie `NetworkFirst` pour les requêtes de données.
-- **Consultation hors-ligne** : En l'absence de réseau, un bandeau discret avertit l'utilisateur et affiche la dernière synchronisation connue stockée en cache local (`localStorage`).
-
----
-
-## 7. Attribution & Droits
-
-Données électriques fournies par **[Electricity Maps](https://app.electricitymaps.com)** et issues des gestionnaires de réseaux de transport européens (ENTSO-E).
-Application développée à des fins pédagogiques et factuelles.
+- Données énergétiques fournies par **[Electricity Maps](https://app.electricitymaps.com)** et issues des gestionnaires de réseaux de transport européens (**ENTSO-E**).
+- Application indépendante à vocation pédagogique et factuelle.

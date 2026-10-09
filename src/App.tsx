@@ -22,6 +22,8 @@ import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { DataProvenanceBanner } from './components/common/DataProvenanceBanner';
 import { OnboardingLegalModal, ONBOARDING_STORAGE_KEY } from './components/common/OnboardingLegalModal';
 import { ScreenContextualOnboarding } from './components/common/ScreenContextualOnboarding';
+import { ScreenOnboardingModal } from './components/common/ScreenOnboardingModal';
+import { SystemSettingsModal } from './components/common/SystemSettingsModal';
 
 const POLLING_INTERVAL_SECONDS = 300; // 5 minutes
 
@@ -60,14 +62,16 @@ export default function App() {
     setIsOnboardingOpen(true);
   }, []);
 
-  // Déclenchement de l'onboarding contextuel de l'écran courant
-  const [guideForceOpen, setGuideForceOpen] = useState<boolean | undefined>(undefined);
+  // Déclenchement de l'onboarding contextuel de l'écran courant (modal dédié)
+  const [isScreenGuideOpen, setIsScreenGuideOpen] = useState<boolean>(false);
   const handleOpenScreenGuide = useCallback(() => {
-    setGuideForceOpen(true);
-    setTimeout(() => {
-      setGuideForceOpen(undefined);
-    }, 200);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setIsScreenGuideOpen(true);
+  }, []);
+
+  // Déclenchement du menu Paramètres Système
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const handleOpenSettings = useCallback(() => {
+    setIsSettingsOpen(true);
   }, []);
 
   // Synchronisation URL -> État
@@ -175,6 +179,7 @@ export default function App() {
         onOpenLegal={handleOpenLegal}
         onOpenOnboarding={handleOpenOnboarding}
         onOpenScreenGuide={handleOpenScreenGuide}
+        onOpenSettings={handleOpenSettings}
       />
 
       {/* Contenu principal */}
@@ -220,8 +225,8 @@ export default function App() {
                 {/* Guide d'onboarding contextuel : Vue Dashboard & Carte */}
                 <ScreenContextualOnboarding
                   screenId="dashboard"
-                  forceOpen={guideForceOpen}
                   onOpenLegal={handleOpenLegal}
+                  onOpenGuideModal={handleOpenScreenGuide}
                 />
 
                 <EUSummaryCards
@@ -257,8 +262,8 @@ export default function App() {
                 {/* Guide d'onboarding contextuel : Fiche Pays */}
                 <ScreenContextualOnboarding
                   screenId="country"
-                  forceOpen={guideForceOpen}
                   onOpenLegal={handleOpenLegal}
+                  onOpenGuideModal={handleOpenScreenGuide}
                 />
                 <CountryDetailView
                   snapshot={activeCountrySnapshot}
@@ -275,8 +280,8 @@ export default function App() {
                 {/* Guide d'onboarding contextuel : Comparateur */}
                 <ScreenContextualOnboarding
                   screenId="compare"
-                  forceOpen={guideForceOpen}
                   onOpenLegal={handleOpenLegal}
+                  onOpenGuideModal={handleOpenScreenGuide}
                 />
                 <CompareView
                   snapshots={snapshots}
@@ -291,8 +296,8 @@ export default function App() {
                 {/* Guide d'onboarding contextuel : Observatoire Carbone */}
                 <ScreenContextualOnboarding
                   screenId="carbon"
-                  forceOpen={guideForceOpen}
                   onOpenLegal={handleOpenLegal}
+                  onOpenGuideModal={handleOpenScreenGuide}
                 />
                 <CarbonView
                   snapshots={snapshots}
@@ -308,8 +313,8 @@ export default function App() {
                 {/* Guide d'onboarding contextuel : Renouvelables */}
                 <ScreenContextualOnboarding
                   screenId="renewables"
-                  forceOpen={guideForceOpen}
                   onOpenLegal={handleOpenLegal}
+                  onOpenGuideModal={handleOpenScreenGuide}
                 />
                 <RenewablesView
                   snapshots={snapshots}
@@ -324,8 +329,8 @@ export default function App() {
                 {/* Guide d'onboarding contextuel : Flux & Interconnexions */}
                 <ScreenContextualOnboarding
                   screenId="flows"
-                  forceOpen={guideForceOpen}
                   onOpenLegal={handleOpenLegal}
+                  onOpenGuideModal={handleOpenScreenGuide}
                 />
                 <FlowsView
                   snapshots={snapshots}
@@ -340,8 +345,8 @@ export default function App() {
                 {/* Guide d'onboarding contextuel : Chronologie 24h */}
                 <ScreenContextualOnboarding
                   screenId="timeline"
-                  forceOpen={guideForceOpen}
                   onOpenLegal={handleOpenLegal}
+                  onOpenGuideModal={handleOpenScreenGuide}
                 />
                 <DayTimelineView
                   snapshots={snapshots}
@@ -360,13 +365,36 @@ export default function App() {
       <OfflineIndicator />
 
       {/* Pied de page & Attribution Electricity Maps */}
-      <Footer onOpenLegal={handleOpenLegal} onOpenOnboarding={handleOpenOnboarding} />
+      <Footer
+        onOpenLegal={handleOpenLegal}
+        onOpenOnboarding={handleOpenOnboarding}
+        onOpenScreenGuide={handleOpenScreenGuide}
+      />
 
       {/* Modale d'accueil et Mentions Légales */}
       <OnboardingLegalModal
         isOpen={isOnboardingOpen}
         onClose={() => setIsOnboardingOpen(false)}
         initialStep={onboardingInitialStep}
+      />
+
+      {/* Modale d'Onboarding Contextuel par Écran */}
+      <ScreenOnboardingModal
+        isOpen={isScreenGuideOpen}
+        onClose={() => setIsScreenGuideOpen(false)}
+        currentScreenId={currentView}
+        onNavigateScreen={handleNavigate}
+        onOpenLegal={handleOpenLegal}
+      />
+
+      {/* Modale des Paramètres Système (Mises à jour, Thème, Version) */}
+      <SystemSettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        onOpenLegal={handleOpenLegal}
+        dataSource={dataSource}
+        dataTimestamp={dataTimestamp}
+        isDemoFallback={isDemoFallback}
       />
     </div>
   );

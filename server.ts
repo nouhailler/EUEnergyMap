@@ -103,6 +103,29 @@ async function fetchElectricityFlows(zoneKey: string): Promise<any> {
 // --- ROUTES D'API SÉCURISÉES ---
 
 /**
+ * GET /api/system/version
+ * Renvoie les informations de version et de build système pour la vérification des mises à jour
+ */
+app.get(['/api/system/version', '/api/version'], (_req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.json({
+    version: '1.4.2',
+    releaseDate: '2026-10-09',
+    releaseDateFormatted: '9 octobre 2026',
+    buildId: '20261009-rev4',
+    buildTimestamp: 1791557000000,
+    channel: 'stable',
+    changelog: [
+      'Menu de paramètres système complet avec vérification et forçage',
+      'Système de mises à jour automatiques en tâche de fond',
+      'Mode Thème Clair, Sombre et synchronisation Système',
+      "Bouton et guide universel d'installation d'application (PWA)",
+      'Nouveau logo officiel haute définition et captures illustrées',
+    ],
+  });
+});
+
+/**
  * GET /api/electricity-maps/status
  * Permet au frontend de savoir si une clé réelle est injectée côté serveur
  */

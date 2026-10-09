@@ -21,10 +21,16 @@ import {
   Scale,
   BookOpen,
   Lightbulb,
+  Settings,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { EU_COUNTRIES } from '../../data/euCountries';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
+import { useTheme } from '../../hooks/useTheme';
 import { DataProvenanceBanner } from './DataProvenanceBanner';
+import { PWAInstallButton } from './PWAInstallButton';
+import { AppLogo } from './AppLogo';
 
 interface CategoryItem {
   id: string;
@@ -58,6 +64,7 @@ interface HamburgerMenuProps {
   onOpenLegal?: () => void;
   onOpenOnboarding?: () => void;
   onOpenScreenGuide?: () => void;
+  onOpenSettings?: () => void;
 }
 
 export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
@@ -76,7 +83,9 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
   onOpenLegal,
   onOpenOnboarding,
   onOpenScreenGuide,
+  onOpenSettings,
 }) => {
+  const { theme, toggleTheme, isDarkMode } = useTheme();
   const [countrySearch, setCountrySearch] = useState('');
   const [showCountrySelector, setShowCountrySelector] = useState(false);
   const { isInstallable, install } = usePWAInstall();
@@ -209,13 +218,11 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
           {/* En-tête du menu */}
           <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/90 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-sky-600/20">
-                <Activity className="w-5 h-5 text-amber-300" />
-              </div>
+              <AppLogo size="md" />
               <div>
                 <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   Fonctionnalités UE
-                  <span className="text-[10px] font-semibold bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 px-1.5 py-0.5 rounded">
+                  <span className="text-[10px] font-semibold bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 px-1.5 py-0.5 rounded border border-sky-200 dark:border-sky-800">
                     27 Pays
                   </span>
                 </h2>
@@ -387,6 +394,48 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
               )}
             </div>
 
+            {/* Section Paramètres & Préférences */}
+            <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-850/60 space-y-2">
+              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
+                Système & Préférences
+              </span>
+              <div className="flex flex-col gap-1.5">
+                {onOpenSettings && (
+                  <button
+                    onClick={() => {
+                      onClose();
+                      onOpenSettings();
+                    }}
+                    className="flex items-center justify-between p-2 rounded-lg text-xs font-semibold text-slate-800 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-800 hover:text-sky-600 dark:hover:text-sky-400 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition cursor-pointer text-left"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Settings className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                      <span>Paramètres Système & Mises à jour</span>
+                    </span>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                  </button>
+                )}
+
+                {/* Bascule Rapide Thème Clair / Sombre */}
+                <button
+                  onClick={toggleTheme}
+                  className="flex items-center justify-between p-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 transition cursor-pointer text-left"
+                >
+                  <span className="flex items-center gap-2">
+                    {isDarkMode ? (
+                      <Sun className="w-4 h-4 text-amber-500" />
+                    ) : (
+                      <Moon className="w-4 h-4 text-indigo-500" />
+                    )}
+                    <span>Thème : {isDarkMode ? 'Passer en mode Clair' : 'Passer en mode Sombre'}</span>
+                  </span>
+                  <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700">
+                    {theme}
+                  </span>
+                </button>
+              </div>
+            </div>
+
             {/* Section Mentions Légales & Guide */}
             <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-850/60 space-y-2">
               <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
@@ -456,31 +505,10 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
               </div>
             </div>
 
-            {/* PWA & Installation si disponible */}
-            {isInstallable && (
-              <div className="p-3 rounded-xl bg-gradient-to-r from-sky-50 to-indigo-50 dark:from-sky-950/40 dark:to-indigo-950/40 border border-sky-100 dark:border-sky-900/60">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h4 className="text-xs font-bold text-sky-900 dark:text-sky-200 flex items-center gap-1.5">
-                      <Download className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
-                      Installer l'application
-                    </h4>
-                    <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
-                      Accédez au tableau de bord hors-ligne directement depuis votre écran d’accueil.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      install();
-                      onClose();
-                    }}
-                    className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-700 text-white shadow-xs transition shrink-0 cursor-pointer"
-                  >
-                    Installer
-                  </button>
-                </div>
-              </div>
-            )}
+            {/* PWA & Installation universelle */}
+            <div className="space-y-1">
+              <PWAInstallButton variant="menu" />
+            </div>
           </div>
 
           {/* Pied de menu avec attribution factuelle */}

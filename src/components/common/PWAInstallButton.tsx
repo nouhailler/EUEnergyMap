@@ -1,70 +1,84 @@
 import React, { useState } from 'react';
-import { Download, Smartphone } from 'lucide-react';
+import { Download, CheckCircle2 } from 'lucide-react';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
+import { PWAInstallGuideModal } from './PWAInstallGuideModal';
 
-export const PWAInstallButton: React.FC = () => {
-  const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
-  const [showIOSGuide, setShowIOSGuide] = useState(false);
+interface PWAInstallButtonProps {
+  className?: string;
+  variant?: 'navbar' | 'menu' | 'card' | 'badge';
+}
 
-  if (isInstalled) {
-    return null;
-  }
+export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
+  className = '',
+  variant = 'navbar',
+}) => {
+  const { isInstallable, isInstalled, install } = usePWAInstall();
+  const [showGuideModal, setShowGuideModal] = useState(false);
 
-  if (isInstallable) {
+  const handleClick = async () => {
+    if (isInstallable) {
+      const installed = await install();
+      if (!installed) {
+        setShowGuideModal(true);
+      }
+    } else {
+      setShowGuideModal(true);
+    }
+  };
+
+  if (isInstalled && variant === 'badge') {
     return (
-      <button
-        onClick={install}
-        className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-sky-700 active:scale-95 transition-all cursor-pointer"
-        title="Installer l'application sur votre appareil"
-      >
-        <Download className="w-3.5 h-3.5" />
-        <span>Installer l'app</span>
-      </button>
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+        <span>Application installée</span>
+      </span>
     );
   }
 
-  if (isIOS) {
-    return (
-      <>
+  return (
+    <>
+      {variant === 'menu' ? (
         <button
-          onClick={() => setShowIOSGuide(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition cursor-pointer"
-          title="Installer sur iPhone ou iPad"
+          onClick={handleClick}
+          className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-semibold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/60 hover:bg-sky-100 dark:hover:bg-sky-900 border border-sky-200 dark:border-sky-800 transition cursor-pointer text-left ${className}`}
         >
-          <Smartphone className="w-3.5 h-3.5 text-sky-600" />
-          <span>Installer PWA</span>
+          <span className="flex items-center gap-2">
+            <Download className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+            <span>Installer l'application sur l'appareil</span>
+          </span>
+          <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-sky-200/80 dark:bg-sky-900 text-sky-800 dark:text-sky-200">
+            PWA
+          </span>
         </button>
+      ) : variant === 'card' ? (
+        <button
+          onClick={handleClick}
+          className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 shadow-sm transition active:scale-95 cursor-pointer ${className}`}
+        >
+          <Download className="w-4 h-4" />
+          <span>Installer l'application</span>
+        </button>
+      ) : (
+        /* Default Navbar */
+        <button
+          onClick={handleClick}
+          className={`inline-flex items-center gap-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 active:scale-95 text-white px-2.5 sm:px-3 py-1.5 text-xs font-semibold shadow-2xs transition cursor-pointer border border-sky-500 ${className}`}
+          title="Installer l'application sur votre mobile ou bureau"
+          aria-label="Installer l'application sur l'écran d'accueil"
+        >
+          <Download className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Installer l'app</span>
+          <span className="sm:hidden">Installer</span>
+        </button>
+      )}
 
-        {showIOSGuide && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-            <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 p-6 shadow-2xl border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-150">
-              <h3 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                <Smartphone className="w-5 h-5 text-sky-600" />
-                Installer sur iPhone ou iPad
-              </h3>
-              <div className="mt-3 space-y-2 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                <p>
-                  1. Touchez l’icône <strong>Partager</strong> <span className="text-sky-600 font-bold">(carré avec flèche vers le haut)</span> dans la barre d'outils de Safari.
-                </p>
-                <p>
-                  2. Faites défiler vers le bas et sélectionnez <strong>Sur l’écran d’accueil</strong>.
-                </p>
-                <p>
-                  3. Confirmez en touchant <strong>Ajouter</strong> en haut à droite.
-                </p>
-              </div>
-              <button
-                onClick={() => setShowIOSGuide(false)}
-                className="mt-5 w-full rounded-xl bg-slate-100 dark:bg-slate-800 py-2.5 text-xs font-medium text-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
-              >
-                Fermer
-              </button>
-            </div>
-          </div>
-        )}
-      </>
-    );
-  }
-
-  return null;
+      {/* Modale d'aide détaillée pour novice */}
+      <PWAInstallGuideModal
+        isOpen={showGuideModal}
+        onClose={() => setShowGuideModal(false)}
+        onNativeInstall={isInstallable ? install : undefined}
+        isInstallable={isInstallable}
+      />
+    </>
+  );
 };
